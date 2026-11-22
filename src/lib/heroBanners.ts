@@ -18,6 +18,7 @@ export interface HeroSlideConfig {
   tabLabelVi: string;
   tabLabelEn: string;
   surfaceClass: string;
+  visible?: boolean;
 }
 
 export interface HeroMetricConfig {
@@ -29,6 +30,7 @@ export interface HeroMetricConfig {
   subVi: string;
   subEn: string;
   to: string;
+  visible?: boolean;
 }
 
 export const DEFAULT_HERO_SLIDES: HeroSlideConfig[] = [
@@ -210,64 +212,70 @@ export const DEFAULT_HERO_METRICS: HeroMetricConfig[] = [
 ];
 
 export function parseHeroSlides(rawJson?: string | null): HeroSlideConfig[] {
-  if (!rawJson) return DEFAULT_HERO_SLIDES;
+  if (!rawJson || !rawJson.trim()) return DEFAULT_HERO_SLIDES;
   try {
     const parsed = JSON.parse(rawJson);
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_HERO_SLIDES;
-    return parsed.map((item: any, idx: number) => {
-      const fb = DEFAULT_HERO_SLIDES[idx] || DEFAULT_HERO_SLIDES[0];
-      const rawImg = String(item.imageKey || item.imageUrl || '').trim();
-      const normalizedImg =
-        !rawImg || rawImg === '/assets/hero-phin.jpg' || rawImg === '/assets/hero-green.jpg'
-          ? fb.imageKey
-          : rawImg;
-      const idxLabel = String(idx + 1).padStart(2, '0');
-      const titleVi = item.titleVi ?? fb.titleVi;
-      return {
-        id: String(item.id || `slide-${idx + 1}`),
-        imageKey: normalizedImg,
-        badgeVi: item.badgeVi ?? item.eyebrowVi ?? fb.badgeVi,
-        badgeEn: item.badgeEn ?? item.eyebrowEn ?? fb.badgeEn,
-        titleVi,
-        titleEn: item.titleEn ?? fb.titleEn,
-        descVi: item.descVi ?? item.subtitleVi ?? fb.descVi,
-        descEn: item.descEn ?? item.subtitleEn ?? fb.descEn,
-        captionVi: item.captionVi ?? fb.captionVi,
-        captionEn: item.captionEn ?? fb.captionEn,
-        primaryCtaVi: item.primaryCtaVi ?? item.ctaLabelVi ?? fb.primaryCtaVi,
-        primaryCtaEn: item.primaryCtaEn ?? item.ctaLabelEn ?? fb.primaryCtaEn,
-        primaryTo: item.primaryTo ?? item.ctaPath ?? fb.primaryTo,
-        secondaryCtaVi: item.secondaryCtaVi ?? fb.secondaryCtaVi,
-        secondaryCtaEn: item.secondaryCtaEn ?? fb.secondaryCtaEn,
-        secondaryTo: item.secondaryTo ?? fb.secondaryTo,
-        tabLabelVi: item.tabLabelVi ?? `${idxLabel} · ${titleVi.slice(0, 22)}`,
-        tabLabelEn: item.tabLabelEn ?? `${idxLabel} · ${(item.titleEn ?? fb.titleEn).slice(0, 22)}`,
-        surfaceClass: item.surfaceClass || fb.surfaceClass || 'bg-[#003D25]',
-      };
-    });
+    if (!Array.isArray(parsed)) return DEFAULT_HERO_SLIDES;
+    return parsed
+      .filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object'))
+      .map((item: any, idx: number) => {
+        const fb = DEFAULT_HERO_SLIDES[idx] || DEFAULT_HERO_SLIDES[0];
+        const rawImg = String(item.imageKey || item.imageUrl || '').trim();
+        const normalizedImg =
+          !rawImg || rawImg === '/assets/hero-phin.jpg' || rawImg === '/assets/hero-green.jpg'
+            ? fb.imageKey
+            : rawImg;
+        const idxLabel = String(idx + 1).padStart(2, '0');
+        const titleVi = item.titleVi ?? fb.titleVi;
+        return {
+          id: String(item.id || `slide-${idx + 1}`),
+          imageKey: normalizedImg,
+          badgeVi: item.badgeVi ?? item.eyebrowVi ?? fb.badgeVi,
+          badgeEn: item.badgeEn ?? item.eyebrowEn ?? fb.badgeEn,
+          titleVi,
+          titleEn: item.titleEn ?? fb.titleEn,
+          descVi: item.descVi ?? item.subtitleVi ?? fb.descVi,
+          descEn: item.descEn ?? item.subtitleEn ?? fb.descEn,
+          captionVi: item.captionVi ?? fb.captionVi,
+          captionEn: item.captionEn ?? fb.captionEn,
+          primaryCtaVi: item.primaryCtaVi ?? item.ctaLabelVi ?? fb.primaryCtaVi,
+          primaryCtaEn: item.primaryCtaEn ?? item.ctaLabelEn ?? fb.primaryCtaEn,
+          primaryTo: item.primaryTo ?? item.ctaPath ?? fb.primaryTo,
+          secondaryCtaVi: item.secondaryCtaVi ?? fb.secondaryCtaVi,
+          secondaryCtaEn: item.secondaryCtaEn ?? fb.secondaryCtaEn,
+          secondaryTo: item.secondaryTo ?? fb.secondaryTo,
+          tabLabelVi: item.tabLabelVi ?? `${idxLabel} · ${titleVi.slice(0, 22)}`,
+          tabLabelEn: item.tabLabelEn ?? `${idxLabel} · ${(item.titleEn ?? fb.titleEn).slice(0, 22)}`,
+          surfaceClass: item.surfaceClass || fb.surfaceClass || 'bg-[#003D25]',
+          visible: typeof item.visible === 'boolean' ? item.visible : true,
+        };
+      });
   } catch {
     return DEFAULT_HERO_SLIDES;
   }
 }
 
 export function parseHeroMetrics(rawJson?: string | null): HeroMetricConfig[] {
-  if (!rawJson) return DEFAULT_HERO_METRICS;
+  if (!rawJson || !rawJson.trim()) return DEFAULT_HERO_METRICS;
   try {
     const parsed = JSON.parse(rawJson);
-    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_HERO_METRICS;
-    return parsed.map((item: any, idx: number) => {
-      const fb = DEFAULT_HERO_METRICS[idx] || DEFAULT_HERO_METRICS[0];
-      return {
-        id: String(item.id || `hm-${idx + 1}`),
-        value: String(item.value ?? fb.value),
-        dot: String(item.dot || fb.dot || 'bg-[#C6A667]'),
-        titleVi: String(item.titleVi ?? item.labelVi ?? fb.titleVi),
-        titleEn: String(item.titleEn ?? item.labelEn ?? fb.titleEn),
-        subVi: String(item.subVi ?? fb.subVi),
-        subEn: String(item.subEn ?? fb.subEn),
-        to: String(item.to || fb.to || '/shop'),
-      };
-    });
+    if (!Array.isArray(parsed)) return DEFAULT_HERO_METRICS;
+    return parsed
+      .filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object'))
+      .map((item: any, idx: number) => {
+        const fb = DEFAULT_HERO_METRICS[idx] || DEFAULT_HERO_METRICS[0];
+        return {
+          id: String(item.id || `hm-${idx + 1}`),
+          value: String(item.value ?? fb.value),
+          dot: String(item.dot || fb.dot || 'bg-[#C6A667]'),
+          titleVi: String(item.titleVi ?? item.labelVi ?? fb.titleVi),
+          titleEn: String(item.titleEn ?? item.labelEn ?? fb.titleEn),
+          subVi: String(item.subVi ?? fb.subVi),
+          subEn: String(item.subEn ?? fb.subEn),
+          to: String(item.to || fb.to || '/shop'),
+          visible: typeof item.visible === 'boolean' ? item.visible : true,
+        };
+      });
   } catch {
     return DEFAULT_HERO_METRICS;
   }

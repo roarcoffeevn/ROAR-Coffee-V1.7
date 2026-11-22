@@ -4,9 +4,11 @@ export type CategoryBannerKey =
   | 'roasted_beans'
   | 'green_bean'
   | 'instant'
-  | 'gift_voucher';
+  | 'gift_voucher'
+  | (string & {});
 
 export interface CmsCategoryBanner {
+  id?: string;
   categoryKey: CategoryBannerKey;
   eyebrowVi: string;
   eyebrowEn: string;
@@ -21,20 +23,28 @@ export interface CmsCategoryBanner {
   visible: boolean;
 }
 
+export const CATEGORY_BANNER_OPTIONS: Array<{
+  key: 'all' | 'roasted' | 'roasted_beans' | 'green_bean' | 'instant' | 'gift_voucher';
+  labelVi: string;
+  labelEn: string;
+  route: string;
+}> = [
+  { key: 'all', labelVi: 'Tất cả sản phẩm', labelEn: 'All Products', route: '/shop' },
+  { key: 'roasted', labelVi: 'Cà phê Rang Xay', labelEn: 'Roasted Coffee', route: '/coffee/roasted' },
+  { key: 'roasted_beans', labelVi: 'Cà phê Hạt Rang (kg)', labelEn: 'Roasted Beans (kg)', route: '/coffee/roasted-beans' },
+  { key: 'green_bean', labelVi: 'Cà phê Nhân Xanh', labelEn: 'Green Coffee Beans', route: '/coffee/green-coffee' },
+  { key: 'instant', labelVi: 'Cà phê Hòa Tan', labelEn: 'Instant Coffee', route: '/coffee/instant' },
+  { key: 'gift_voucher', labelVi: 'Thẻ Quà Tặng Gift Voucher', labelEn: 'Gift Vouchers', route: '/coffee/gift-vouchers' },
+];
+
 export const CATEGORY_BANNER_META: Record<
-  CategoryBannerKey,
+  string,
   { labelVi: string; labelEn: string; route: string }
-> = {
-  all: { labelVi: 'Tất cả sản phẩm', labelEn: 'All Products', route: '/shop' },
-  roasted: { labelVi: 'Cà phê Rang Xay', labelEn: 'Roasted Coffee', route: '/coffee/roasted' },
-  roasted_beans: { labelVi: 'Cà phê Hạt Rang (kg)', labelEn: 'Roasted Beans (kg)', route: '/coffee/roasted-beans' },
-  green_bean: { labelVi: 'Cà phê Nhân Xanh', labelEn: 'Green Coffee Beans', route: '/coffee/green-coffee' },
-  instant: { labelVi: 'Cà phê Hòa Tan', labelEn: 'Instant Coffee', route: '/coffee/instant' },
-  gift_voucher: { labelVi: 'Thẻ Quà Tặng Gift Voucher', labelEn: 'Gift Vouchers', route: '/coffee/gift-vouchers' },
-};
+> = Object.fromEntries(CATEGORY_BANNER_OPTIONS.map((o) => [o.key, { labelVi: o.labelVi, labelEn: o.labelEn, route: o.route }]));
 
 export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
   {
+    id: 'cat-all',
     categoryKey: 'all',
     eyebrowVi: 'TOÀN BỘ HỆ SINH THÁI ROAR COFFEE®',
     eyebrowEn: 'COMPLETE ROAR COFFEE® CATALOG',
@@ -51,6 +61,7 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
     visible: true,
   },
   {
+    id: 'cat-roasted',
     categoryKey: 'roasted',
     eyebrowVi: 'RANG MỘC 100% · BẢN SẮC PHIN & ESPRESSO',
     eyebrowEn: '100% PURE ROAST · PHIN & ESPRESSO SIGNATURES',
@@ -67,6 +78,7 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
     visible: true,
   },
   {
+    id: 'cat-roasted_beans',
     categoryKey: 'roasted_beans',
     eyebrowVi: 'CHUYÊN BIỆT CHO QUÁN CÀ PHÊ · HORECA · VĂN PHÒNG',
     eyebrowEn: 'DEDICATED TO CAFÉS · HORECA · WORKPLACES',
@@ -83,6 +95,7 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
     visible: true,
   },
   {
+    id: 'cat-green_bean',
     categoryKey: 'green_bean',
     eyebrowVi: 'THƯƠNG MẠI NHÂN XANH B2B · S14 / S16 / S18',
     eyebrowEn: 'COMMERCIAL GREEN COFFEE TRADE · S14 / S16 / S18',
@@ -99,6 +112,7 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
     visible: true,
   },
   {
+    id: 'cat-instant',
     categoryKey: 'instant',
     eyebrowVi: 'CHIẾT XUẤT SẤY LẠNH GIỮ TRỌN HƯƠNG RANG',
     eyebrowEn: 'FREEZE-DRIED AROMA RETENTION',
@@ -115,6 +129,7 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
     visible: true,
   },
   {
+    id: 'cat-gift_voucher',
     categoryKey: 'gift_voucher',
     eyebrowVi: 'QUÀ TẶNG DOANH NGHIỆP & ĐẶC QUYỀN TRI ÂN',
     eyebrowEn: 'EXECUTIVE GIFTING & CURATED VOUCHERS',
@@ -133,26 +148,31 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
 ];
 
 export function parseCategoryBanners(rawJson?: string | null): CmsCategoryBanner[] {
-  if (!rawJson) return DEFAULT_CATEGORY_BANNERS;
+  if (!rawJson || !rawJson.trim()) return DEFAULT_CATEGORY_BANNERS;
   try {
     const parsed = JSON.parse(rawJson);
     if (!Array.isArray(parsed)) return DEFAULT_CATEGORY_BANNERS;
-    const byKey = new Map<string, Partial<CmsCategoryBanner>>();
-    for (const item of parsed) {
-      if (item && typeof item.categoryKey === 'string') {
-        byKey.set(item.categoryKey, item);
-      }
-    }
-    return DEFAULT_CATEGORY_BANNERS.map((def) => {
-      const override = byKey.get(def.categoryKey);
-      if (!override) return def;
-      return {
-        ...def,
-        ...override,
-        categoryKey: def.categoryKey,
-        visible: typeof override.visible === 'boolean' ? override.visible : def.visible,
-      };
-    });
+    return parsed
+      .filter((item): item is Record<string, any> => Boolean(item && typeof item === 'object'))
+      .map((item, idx) => {
+        const key = String(item.categoryKey || 'all').trim() || 'all';
+        const fb = DEFAULT_CATEGORY_BANNERS.find((d) => d.categoryKey === key) || DEFAULT_CATEGORY_BANNERS[0];
+        return {
+          id: String(item.id || `cat-${key}-${idx + 1}`),
+          categoryKey: key,
+          eyebrowVi: String(item.eyebrowVi ?? fb.eyebrowVi),
+          eyebrowEn: String(item.eyebrowEn ?? fb.eyebrowEn),
+          titleVi: String(item.titleVi ?? fb.titleVi),
+          titleEn: String(item.titleEn ?? fb.titleEn),
+          subtitleVi: String(item.subtitleVi ?? fb.subtitleVi),
+          subtitleEn: String(item.subtitleEn ?? fb.subtitleEn),
+          imageUrl: String(item.imageUrl ?? fb.imageUrl),
+          ctaLabelVi: String(item.ctaLabelVi ?? fb.ctaLabelVi),
+          ctaLabelEn: String(item.ctaLabelEn ?? fb.ctaLabelEn),
+          ctaPath: String(item.ctaPath ?? fb.ctaPath),
+          visible: typeof item.visible === 'boolean' ? item.visible : true,
+        };
+      });
   } catch {
     return DEFAULT_CATEGORY_BANNERS;
   }

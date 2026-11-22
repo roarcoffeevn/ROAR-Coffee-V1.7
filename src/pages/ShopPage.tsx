@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Gift, Heart, Search } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Gift, Heart, Search } from 'lucide-react';
 import { GiftVoucherModal } from '../components/GiftVoucherModal';
 import { MediaImage } from '../components/MediaImage';
 import { RecentlyViewedStrip } from '../components/RecentlyViewedStrip';
@@ -33,10 +33,28 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
   const [loading, setLoading] = useState(true);
   const [giftModalProduct, setGiftModalProduct] = useState<Product | null>(null);
   const [giftModalMode, setGiftModalMode] = useState<'self' | 'gift'>('gift');
+  const [catBannerIdx, setCatBannerIdx] = useState(0);
+
+  const matchingCategoryBanners = useMemo(
+    () =>
+      parseCategoryBanners(settings?.cms_category_banners_json).filter(
+        (b) => b.categoryKey === category && b.visible
+      ),
+    [settings?.cms_category_banners_json, category]
+  );
 
   useEffect(() => {
     setCategory(urlCat || defaultCategory);
+    setCatBannerIdx(0);
   }, [defaultCategory, urlCat]);
+
+  useEffect(() => {
+    if (matchingCategoryBanners.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setCatBannerIdx((prev) => (prev + 1) % matchingCategoryBanners.length);
+    }, 6000);
+    return () => window.clearInterval(timer);
+  }, [matchingCategoryBanners.length]);
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -172,16 +190,16 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
 
       {/* Category Showcase Banner (Managed via Admin CMS -> Banner Danh Mục Sản Phẩm) */}
       {(() => {
-        const banners = parseCategoryBanners(settings?.cms_category_banners_json);
-        const activeBanner = banners.find((b) => b.categoryKey === category) || banners.find((b) => b.categoryKey === 'all');
-        if (!activeBanner || !activeBanner.visible) return null;
+        if (matchingCategoryBanners.length === 0) return null;
+        const safeIdx = catBannerIdx % matchingCategoryBanners.length;
+        const activeBanner = matchingCategoryBanners[safeIdx];
         const eyebrow = lang === 'en' ? activeBanner.eyebrowEn : activeBanner.eyebrowVi;
         const title = lang === 'en' ? activeBanner.titleEn : activeBanner.titleVi;
         const subtitle = lang === 'en' ? activeBanner.subtitleEn : activeBanner.subtitleVi;
         const ctaLabel = lang === 'en' ? activeBanner.ctaLabelEn : activeBanner.ctaLabelVi;
 
         return (
-          <section className="rounded-xl overflow-hidden bg-[#0D1B14] border border-[#00552B]/25 dark:border-[#C6A667]/25 shadow-sm grid grid-cols-12 items-stretch min-h-[96px] sm:h-[112px] lg:h-[118px]">
+          <section className="relative rounded-xl overflow-hidden bg-[#0D1B14] border border-[#00552B]/25 dark:border-[#C6A667]/25 shadow-sm grid grid-cols-12 items-stretch min-h-[96px] sm:h-[112px] lg:h-[118px]">
             <div className="col-span-8 lg:col-span-8 px-3.5 py-2.5 sm:px-5 sm:py-3 lg:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 min-w-0">
               <div className="min-w-0 space-y-0.5 sm:space-y-1">
                 {eyebrow && (
@@ -200,7 +218,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
               </div>
 
               {ctaLabel && activeBanner.ctaPath && (
-                <div className="shrink-0">
+                <div className="shrink-0 flex items-center gap-2">
                   <Link
                     to={localePath(activeBanner.ctaPath)}
                     className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3.5 sm:py-1.5 bg-[#C6A667] hover:bg-[#d5b578] text-[#111111] text-[10px] sm:text-xs font-bold rounded transition-colors whitespace-nowrap"
@@ -219,6 +237,31 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#0D1B14] via-[#0D1B14]/30 to-transparent pointer-events-none" />
+              {matchingCategoryBanners.length > 1 && (
+                <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 bg-black/55 border border-white/20 rounded-full px-1.5 py-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCatBannerIdx((prev) => (prev - 1 + matchingCategoryBanners.length) % matchingCategoryBanners.length)
+                    }
+                    aria-label={t('Banner trước', 'Previous banner')}
+                    className="p-0.5 text-white hover:text-[#C6A667] cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="font-mono text-[10px] text-white/90 px-1 tabular-nums">
+                    {safeIdx + 1}/{matchingCategoryBanners.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCatBannerIdx((prev) => (prev + 1) % matchingCategoryBanners.length)}
+                    aria-label={t('Banner tiếp', 'Next banner')}
+                    className="p-0.5 text-white hover:text-[#C6A667] cursor-pointer"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         );

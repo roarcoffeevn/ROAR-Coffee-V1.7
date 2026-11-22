@@ -16,11 +16,11 @@ export const HomePage: React.FC = () => {
   const { personalities, settings, formatPrice, addToCart, showToast, theme } = useStore();
 
   const heroSlides = useMemo(
-    () => parseHeroSlides(settings.cms_hero_slides_json),
+    () => parseHeroSlides(settings.cms_hero_slides_json).filter((s) => s.visible !== false),
     [settings.cms_hero_slides_json]
   );
   const heroMetrics = useMemo(
-    () => parseHeroMetrics(settings.cms_hero_metrics_json),
+    () => parseHeroMetrics(settings.cms_hero_metrics_json).filter((m) => m.visible !== false),
     [settings.cms_hero_metrics_json]
   );
 
@@ -91,6 +91,7 @@ export const HomePage: React.FC = () => {
   return (
     <div className="bg-[#F8F5EF] dark:bg-[#0E1512] text-[#202020] dark:text-[#F1EFEA] transition-colors">
       {/* 1. COMPACT DYNAMIC MULTI-SLIDE HERO BANNER CAROUSEL */}
+      {activeSlide && (
       <section
         className={`relative ${activeSlide.surfaceClass} text-white overflow-hidden transition-colors duration-700`}
         onMouseEnter={() => setHeroPaused(true)}
@@ -138,36 +139,38 @@ export const HomePage: React.FC = () => {
             </div>
 
             {/* Dynamic Horizontal Running Carousel of Diverse Metrics */}
-            <div className="pt-3 border-t border-white/15">
-              <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_5%,black_95%,transparent)]">
-                <div className="animate-metrics-marquee gap-2.5">
-                  {[0, 1].map((dup) => (
-                    <div key={dup} className="flex items-stretch gap-2.5 pr-2.5" aria-hidden={dup === 1}>
-                      {heroMetrics.map((item, idx) => (
-                        <Link
-                          key={`${dup}-${item.id || idx}`}
-                          to={localePath(item.to)}
-                          className="group w-[178px] sm:w-[192px] shrink-0 p-2.5 rounded-lg bg-white/6 hover:bg-white/14 border border-white/12 hover:border-[#C6A667]/60 transition-all"
-                        >
-                          <div className="flex items-baseline justify-between gap-1">
-                            <span className="font-mono text-sm sm:text-base font-bold text-[#C6A667] tabular-nums group-hover:scale-105 transition-transform origin-left">
-                              {item.value}
+            {heroMetrics.length > 0 && (
+              <div className="pt-3 border-t border-white/15">
+                <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_5%,black_95%,transparent)]">
+                  <div className="animate-metrics-marquee gap-2.5">
+                    {[0, 1].map((dup) => (
+                      <div key={dup} className="flex items-stretch gap-2.5 pr-2.5" aria-hidden={dup === 1}>
+                        {heroMetrics.map((item, idx) => (
+                          <Link
+                            key={`${dup}-${item.id || idx}`}
+                            to={localePath(item.to)}
+                            className="group w-[178px] sm:w-[192px] shrink-0 p-2.5 rounded-lg bg-white/6 hover:bg-white/14 border border-white/12 hover:border-[#C6A667]/60 transition-all"
+                          >
+                            <div className="flex items-baseline justify-between gap-1">
+                              <span className="font-mono text-sm sm:text-base font-bold text-[#C6A667] tabular-nums group-hover:scale-105 transition-transform origin-left">
+                                {item.value}
+                              </span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${item.dot} animate-pulse`} />
+                            </div>
+                            <span className="block text-[11px] font-semibold text-white leading-tight mt-0.5 truncate">
+                              {lang === 'vi' ? item.titleVi : item.titleEn}
                             </span>
-                            <span className={`w-1.5 h-1.5 rounded-full ${item.dot} animate-pulse`} />
-                          </div>
-                          <span className="block text-[11px] font-semibold text-white leading-tight mt-0.5 truncate">
-                            {lang === 'vi' ? item.titleVi : item.titleEn}
-                          </span>
-                          <span className="block text-[10px] text-[#F8F5EF]/70 mt-0.5 truncate">
-                            {lang === 'vi' ? item.subVi : item.subEn}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  ))}
+                            <span className="block text-[10px] text-[#F8F5EF]/70 mt-0.5 truncate">
+                              {lang === 'vi' ? item.subVi : item.subEn}
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Uniform 4:3 Aspect Ratio Hero Media Frame */}
@@ -252,6 +255,7 @@ export const HomePage: React.FC = () => {
           </div>
         </div>
       </section>
+      )}
 
       {/* COMPACT COLLAPSIBLE GIFT VOUCHER BAR (50k - 100k - 500k - 1M) */}
       {giftVouchers.length > 0 && (
