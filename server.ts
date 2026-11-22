@@ -345,6 +345,14 @@ app.post('/api/auth/login', (req, res) => {
   }
   const normalizedEmail = String(email).trim().toLowerCase();
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(normalizedEmail) as any;
+  if (user && user.role === 'admin' && !String(user.password_hash || '').includes(':')) {
+    res.status(401).json({
+      code: 'PASSWORD_NOT_SET',
+      error:
+        'Tài khoản Quản trị viên này chưa được đặt mật khẩu trên hệ thống hiện tại. Vui lòng đăng nhập Super Admin khác để đặt mật khẩu tại mục Phân quyền Thành viên.',
+    });
+    return;
+  }
   if (!user || !verifyPassword(String(password), user.password_hash)) {
     res.status(401).json({ error: 'Invalid email or password' });
     return;
@@ -3301,7 +3309,7 @@ app.patch('/api/admin/orders/:id', requirePermission('orders'), (req: AuthedRequ
 app.get('/api/admin/customers', requirePermission('customers'), (_req, res) => {
   syncUnlinkedOrderCustomers();
   const users = db
-    .prepare('SELECT id, email, full_name, phone, role, admin_role, member_code, tier, wallet_balance_vnd, email_verified, company_name, b2b_verified, deletion_requested, created_at FROM users ORDER BY id DESC')
+    .prepare('SELECT id, email, full_name, phone, role, admin_role, member_code, tier, wallet_balance_vnd, email_verified, company_name, b2b_verified, deletion_requested, created_at, password_hash FROM users ORDER BY id DESC')
     .all() as any[];
   const enriched = users.map((u) => {
     const syncedTier = syncUserTierInDb(u.id);
@@ -3311,8 +3319,10 @@ app.get('/api/admin/customers', requirePermission('customers'), (_req, res) => {
     const unreadNotifications = (
       db.prepare('SELECT COUNT(*) as c FROM user_notifications WHERE user_id = ? AND is_read = 0').get(u.id) as { c: number }
     ).c;
+    const { password_hash: rawHash, ...safeUser } = u;
     return {
-      ...u,
+      ...safeUser,
+      has_password: Boolean(rawHash && String(rawHash).includes(':')),
       tier: syncedTier,
       points: getPointsSummary(u.id),
       orderCount: orderStats.c,
@@ -3814,7 +3824,7 @@ app.patch('/api/admin/pages/:slug', requirePermission('pages'), (req: AuthedRequ
 app.get('/api/admin/team', requirePermission('team'), (_req, res) => {
   const adminRows = db
     .prepare(
-      "SELECT id, email, full_name, phone, role, admin_role, admin_permissions_json, member_code, tier, created_at FROM users WHERE role = 'admin' ORDER BY id ASC"
+      "SELECT id, email, full_name, phone, role, admin_role, admin_permissions_json, member_code, tier, created_at, password_hash FROM users WHERE role = 'admin' ORDER BY id ASC"
     )
     .all() as any[];
 
@@ -3831,6 +3841,7 @@ app.get('/api/admin/team', requirePermission('team'), (_req, res) => {
       memberCode: u.member_code,
       tier: u.tier,
       createdAt: u.created_at,
+      hasPassword: Boolean(u.password_hash && String(u.password_hash).includes(':')),
     };
   });
 

@@ -33,6 +33,7 @@ export interface AdminTeamMember {
   memberCode: string;
   tier: string;
   createdAt: string;
+  hasPassword?: boolean;
 }
 
 export interface NonAdminCandidate {
@@ -78,6 +79,7 @@ export const TeamRbacSection: React.FC<TeamRbacSectionProps> = ({
   const [editName, setEditName] = useState('');
   const [savingId, setSavingId] = useState<number | null>(null);
   const [resetTarget, setResetTarget] = useState<ResetPasswordTarget | null>(null);
+  const isActorSuperAdmin = user?.adminRole === 'super_admin' || (user?.role === 'admin' && !user?.adminRole);
 
   useEffect(() => {
     if (!promoteEmail && nonAdmins.length > 0) {
@@ -474,6 +476,11 @@ export const TeamRbacSection: React.FC<TeamRbacSectionProps> = ({
                           · {t('Đang đăng nhập', 'Current Session')}
                         </span>
                       )}
+                      {m.hasPassword === false && (
+                        <span className="text-[11px] font-semibold text-amber-700">
+                          · {t('Chưa đặt mật khẩu', 'Password Not Set')}
+                        </span>
+                      )}
                     </div>
                     <p className="text-slate-500 font-mono">
                       {m.email} · {m.memberCode} {m.phone ? `· ${m.phone}` : ''}
@@ -491,7 +498,7 @@ export const TeamRbacSection: React.FC<TeamRbacSectionProps> = ({
                     </div>
                     <button
                       type="button"
-                      disabled={m.adminRole === 'super_admin' && user?.adminRole !== 'super_admin'}
+                      disabled={m.adminRole === 'super_admin' && !isActorSuperAdmin}
                       onClick={() =>
                         setResetTarget({
                           id: m.id,
@@ -503,14 +510,18 @@ export const TeamRbacSection: React.FC<TeamRbacSectionProps> = ({
                         })
                       }
                       title={
-                        m.adminRole === 'super_admin' && user?.adminRole !== 'super_admin'
+                        m.adminRole === 'super_admin' && !isActorSuperAdmin
                           ? t('Chỉ Super Admin mới có thể đặt lại mật khẩu của Super Admin', 'Only Super Admins can reset another Super Admin password')
                           : t('Đặt lại mật khẩu đăng nhập CMS', 'Reset CMS login password')
                       }
-                      className="px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-800 font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={`px-3 py-1.5 rounded-lg border font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        m.hasPassword === false
+                          ? 'border-amber-400 bg-amber-100 hover:bg-amber-200 text-amber-900'
+                          : 'border-amber-200 bg-amber-50/70 hover:bg-amber-100 text-amber-800'
+                      }`}
                     >
                       <LockKeyhole className="w-3.5 h-3.5" />
-                      {t('Đặt lại mật khẩu', 'Reset Pass')}
+                      {m.hasPassword === false ? t('Đặt mật khẩu ngay', 'Set Password') : t('Đặt lại mật khẩu', 'Reset Pass')}
                     </button>
                     <button
                       type="button"

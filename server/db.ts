@@ -2526,6 +2526,29 @@ function runIncrementalMigrations(): void {
     );
   }
 
+  const ownerRow = db.prepare("SELECT id, role FROM users WHERE LOWER(TRIM(email)) = 'taminhnghia.com@gmail.com'").get() as
+    | { id: number; role: string }
+    | undefined;
+  if (!ownerRow) {
+    db.prepare(`
+      INSERT INTO users (
+        email, password_hash, full_name, phone, role, admin_role, admin_permissions_json,
+        member_code, tier, email_verified
+      ) VALUES (?, '', ?, '', 'admin', 'super_admin', ?, ?, 'ROAR Reserve', 1)
+    `).run(
+      'taminhnghia.com@gmail.com',
+      'Tạ Minh Nghĩa (Super Admin)',
+      JSON.stringify([...ALL_ADMIN_PERMISSIONS]),
+      'RC-ADM-0003'
+    );
+  } else {
+    db.prepare(`
+      UPDATE users
+      SET role = 'admin', admin_role = 'super_admin', admin_permissions_json = ?, email_verified = 1
+      WHERE id = ?
+    `).run(JSON.stringify([...ALL_ADMIN_PERMISSIONS]), ownerRow.id);
+  }
+
   // Normalize any legacy localized tier names to canonical ROAR tier names
   db.prepare("UPDATE users SET tier = 'ROAR Silver' WHERE LOWER(TRIM(tier)) IN ('roar bạc', 'roar bac', 'silver', 'hạng bạc')").run();
   db.prepare("UPDATE users SET tier = 'ROAR Gold' WHERE LOWER(TRIM(tier)) IN ('roar vàng', 'roar vang', 'gold', 'hạng vàng')").run();

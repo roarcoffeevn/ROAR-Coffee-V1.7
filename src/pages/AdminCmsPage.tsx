@@ -216,6 +216,8 @@ export const AdminCmsPage: React.FC = () => {
   };
 
   const isAdmin = user?.role === 'admin';
+  const isActorSuperAdmin =
+    isAdmin && (user?.adminRole === 'super_admin' || (!user?.adminRole && (!user?.adminPermissions || user.adminPermissions.length === 0)));
   const canMedia =
     isAdmin &&
     (['media', 'posts', 'products', 'pages', 'brand'] as AdminPermission[]).some((p) => hasAdminPermission(user, p));
@@ -2079,7 +2081,7 @@ export const AdminCmsPage: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                disabled={c.role === 'admin' && (!hasAdminPermission(user, 'team') || (c.admin_role === 'super_admin' && user?.adminRole !== 'super_admin'))}
+                                disabled={c.role === 'admin' && (!hasAdminPermission(user, 'team') || (c.admin_role === 'super_admin' && !isActorSuperAdmin))}
                                 onClick={() =>
                                   setResetPasswordTarget({
                                     id: c.id,
@@ -2093,7 +2095,7 @@ export const AdminCmsPage: React.FC = () => {
                                 className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded font-semibold inline-flex items-center gap-1 text-[11px] cursor-pointer disabled:opacity-40"
                               >
                                 <KeyRound className="w-3 h-3" />
-                                {t('Đặt lại MK', 'Reset Pass')}
+                                {c.has_password === false ? t('Đặt MK', 'Set Pass') : t('Đặt lại MK', 'Reset Pass')}
                               </button>
                               <button
                                 type="button"
@@ -2196,7 +2198,7 @@ export const AdminCmsPage: React.FC = () => {
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={c.role === 'admin' && (!hasAdminPermission(user, 'team') || (c.admin_role === 'super_admin' && user?.adminRole !== 'super_admin'))}
+                                  disabled={c.role === 'admin' && (!hasAdminPermission(user, 'team') || (c.admin_role === 'super_admin' && !isActorSuperAdmin))}
                                   onClick={() =>
                                     setResetPasswordTarget({
                                       id: c.id,
@@ -2211,7 +2213,7 @@ export const AdminCmsPage: React.FC = () => {
                                   className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                   <KeyRound className="w-3 h-3" />
-                                  {t('Đặt lại MK', 'Reset Pass')}
+                                  {c.has_password === false ? t('Đặt MK', 'Set Pass') : t('Đặt lại MK', 'Reset Pass')}
                                 </button>
                                 <button
                                   type="button"

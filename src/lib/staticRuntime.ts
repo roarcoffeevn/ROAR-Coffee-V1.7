@@ -69,6 +69,20 @@ function getDefaultUsers(): StaticUserRecord[] {
       emailVerified: true,
       createdAt: '2026-02-01 09:00:00',
     },
+    {
+      id: 3,
+      email: 'taminhnghia.com@gmail.com',
+      password: '',
+      fullName: 'Tạ Minh Nghĩa (Super Admin)',
+      phone: '',
+      role: 'admin',
+      adminRole: 'super_admin',
+      adminPermissions: [...ALL_ADMIN_PERMISSIONS],
+      memberCode: 'RC-ADM-0003',
+      tier: 'ROAR Reserve',
+      emailVerified: true,
+      createdAt: '2026-01-02 08:00:00',
+    },
   ];
 }
 
@@ -185,6 +199,57 @@ function getDefaultOrders(): any[] {
   ];
 }
 
+function ensureNormalizedUsers(rawUsers: StaticUserRecord[]): StaticUserRecord[] {
+  const normalized = rawUsers.map((u: StaticUserRecord) => {
+    const isAdmin = u.role === 'admin';
+    const adminRole = isAdmin
+      ? u.adminRole && u.adminRole !== 'none'
+        ? u.adminRole
+        : 'super_admin'
+      : 'none';
+    const adminPermissions =
+      adminRole === 'super_admin'
+        ? [...ALL_ADMIN_PERMISSIONS]
+        : Array.isArray(u.adminPermissions)
+          ? u.adminPermissions
+          : [];
+    return {
+      ...u,
+      adminRole,
+      adminPermissions,
+      tier: normalizeMembershipTierName(u.tier),
+    };
+  });
+
+  const ownerIdx = normalized.findIndex((u) => u.email.toLowerCase() === 'taminhnghia.com@gmail.com');
+  if (ownerIdx === -1) {
+    const nextId = Math.max(10, ...normalized.map((u) => u.id)) + 1;
+    normalized.push({
+      id: nextId,
+      email: 'taminhnghia.com@gmail.com',
+      password: '',
+      fullName: 'Tạ Minh Nghĩa (Super Admin)',
+      phone: '',
+      role: 'admin',
+      adminRole: 'super_admin',
+      adminPermissions: [...ALL_ADMIN_PERMISSIONS],
+      memberCode: 'RC-ADM-0003',
+      tier: 'ROAR Reserve',
+      emailVerified: true,
+      createdAt: '2026-01-02 08:00:00',
+    });
+  } else {
+    normalized[ownerIdx] = {
+      ...normalized[ownerIdx],
+      role: 'admin',
+      adminRole: 'super_admin',
+      adminPermissions: [...ALL_ADMIN_PERMISSIONS],
+      emailVerified: true,
+    };
+  }
+  return normalized;
+}
+
 function readState(): StaticRuntimeState {
   try {
     const raw = window.localStorage.getItem(STATIC_STATE_KEY);
@@ -192,10 +257,7 @@ function readState(): StaticRuntimeState {
       const parsed = JSON.parse(raw);
       const rawUsers = Array.isArray(parsed.users) && parsed.users.length > 0 ? parsed.users : getDefaultUsers();
       return {
-        users: rawUsers.map((u: StaticUserRecord) => ({
-          ...u,
-          tier: normalizeMembershipTierName(u.tier),
-        })),
+        users: ensureNormalizedUsers(rawUsers),
         orders: Array.isArray(parsed.orders) && parsed.orders.length > 0 ? parsed.orders : getDefaultOrders(),
         b2bInquiries: Array.isArray(parsed.b2bInquiries) ? parsed.b2bInquiries : [],
         newsletterSubscribers: Array.isArray(parsed.newsletterSubscribers) ? parsed.newsletterSubscribers : [],
@@ -352,14 +414,26 @@ function syncStaticUserTier(state: StaticRuntimeState, user: StaticUserRecord): 
 }
 
 function toPublicUser(u: StaticUserRecord) {
+  const effectiveAdminRole =
+    u.role === 'admin'
+      ? u.adminRole && u.adminRole !== 'none'
+        ? u.adminRole
+        : 'super_admin'
+      : 'none';
+  const effectiveAdminPerms =
+    effectiveAdminRole === 'super_admin'
+      ? [...ALL_ADMIN_PERMISSIONS]
+      : Array.isArray(u.adminPermissions)
+        ? u.adminPermissions
+        : [];
   return {
     id: u.id,
     email: u.email,
     fullName: u.fullName,
     phone: u.phone,
     role: u.role,
-    adminRole: u.adminRole,
-    adminPermissions: u.adminPermissions,
+    adminRole: effectiveAdminRole,
+    adminPermissions: effectiveAdminPerms,
     memberCode: u.memberCode,
     tier: normalizeMembershipTierName(u.tier),
     emailVerified: u.emailVerified,
@@ -454,18 +528,29 @@ export async function handleStaticApiFallback(
   if (pathname === '/api/auth/login' && method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase();
     const password = String(body.password || '');
-    let found = state.users.find((u) => u.email.toLowerCase() === email && u.password === password);
+    const emailMatch = state.users.find((u) => u.email.toLowerCase() === email);
+    if (emailMatch && emailMatch.role === 'admin' && !emailMatch.password) {
+      return jsonResponse(
+        {
+          code: 'PASSWORD_NOT_SET',
+          error:
+            `Tài khoản Super Admin ${emailMatch.email} đã được cấu hình trên hệ thống nhưng chưa được đặt mật khẩu trên tên miền hiện tại. Vui lòng bấm "Super Admin mẫu" bên dưới để vào Phân quyền thành viên và đặt mật khẩu mới.`,
+        },
+        401
+      );
+    }
+    let found = state.users.find((u) => u.email.toLowerCase() === email && u.password && u.password === password);
     // Also accept backend default credentials on static hosts (even if localStorage had older defaults)
     if (!found && email === 'admin@roarcoffee.vn' && (password === 'Admin@Roar2026!' || password === 'RoarAdmin2026!' || password === 'RoarAdmin!2026')) {
       found = state.users.find((u) => u.email.toLowerCase() === 'admin@roarcoffee.vn');
     }
-    if (!found && email === 'member@roarcoffee.vn' && (password === 'Member@Roar2026!' || password === 'RoarMember2026!')) {
+    if (!found && email === 'member@roarcoffee.vn' && (password === 'Member@Roar2026!' || password === 'RoarMember2026!' || password === 'RoarMember!2026')) {
       found = state.users.find((u) => u.email.toLowerCase() === 'member@roarcoffee.vn');
       if (!found) {
         found = {
-          id: 3,
+          id: 4,
           email: 'member@roarcoffee.vn',
-          password: 'Member@Roar2026!',
+          password: 'RoarMember!2026',
           fullName: 'Nguyễn Minh Khôi',
           phone: '0912345678',
           role: 'customer',
@@ -484,14 +569,14 @@ export async function handleStaticApiFallback(
       found = state.users.find((u) => u.email.toLowerCase() === 'editor@roarcoffee.vn');
       if (!found) {
         found = {
-          id: 4,
+          id: 5,
           email: 'editor@roarcoffee.vn',
-          password: 'Editor@Roar2026!',
+          password: 'RoarEditor!2026',
           fullName: 'Trần Thảo Vy (Biên tập CMS)',
           phone: '0909888777',
           role: 'admin',
-          adminRole: 'editor',
-          adminPermissions: [...ALL_ADMIN_PERMISSIONS],
+          adminRole: 'content_editor',
+          adminPermissions: ['overview', 'pages', 'posts', 'media', 'brand'],
           memberCode: 'RC-ADM-0002',
           tier: 'ROAR Gold',
           emailVerified: true,
@@ -1329,6 +1414,7 @@ export async function handleStaticApiFallback(
             phone: x.phone || '',
             role: x.role,
             admin_role: x.adminRole || (x.role === 'admin' ? 'super_admin' : 'none'),
+            has_password: Boolean(x.password),
             member_code: x.memberCode,
             tier: normalizeMembershipTierName(x.tier),
             company_name: x.companyName || '',
@@ -1513,6 +1599,7 @@ export async function handleStaticApiFallback(
             memberCode: x.memberCode,
             tier: x.tier || 'ROAR Gold',
             createdAt: x.createdAt,
+            hasPassword: Boolean(x.password),
           };
         });
       const nonAdmins = state.users
