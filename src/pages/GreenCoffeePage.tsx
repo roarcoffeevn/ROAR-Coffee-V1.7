@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Download, FileText, Package } from 'lucide-react';
+import { Download, FileText, Package, Printer } from 'lucide-react';
 import { B2BInquiryModal } from '../components/B2BInquiryModal';
 import { MediaImage } from '../components/MediaImage';
 import { useI18n } from '../i18n/I18nContext';
 import { type Product, useStore } from '../context/StoreContext';
 import { localizeCoffeeType } from '../lib/i18nHelpers';
+import { printB2BQuoteSheet } from '../lib/printDocuments';
 import { fetchProductsWithFallback } from '../lib/staticFallback';
 
 export const GreenCoffeePage: React.FC = () => {
   const { lang, t, localePath } = useI18n();
-  const { formatPrice, currency, setCurrency } = useStore();
+  const { formatPrice, currency, setCurrency, settings } = useStore();
   const [searchParams] = useSearchParams();
 
   const [typeFilter, setTypeFilter] = useState(searchParams.get('type') || 'all');
@@ -104,6 +105,27 @@ export const GreenCoffeePage: React.FC = () => {
                 className="px-5 py-2.5 border border-white/30 text-white text-xs font-medium rounded hover:bg-white/10 cursor-pointer"
               >
                 {t('YÊU CẦU BÁO GIÁ', 'REQUEST A QUOTATION')}
+              </button>
+              <button
+                type="button"
+                disabled={products.length === 0}
+                onClick={() =>
+                  printB2BQuoteSheet({
+                    titleVi: 'Bảng Báo Giá Tham Chiếu Ma Trận Cà Phê Nhân Xanh (27 SKUs)',
+                    titleEn: '27-SKU Vietnamese Green Coffee Reference Quotation',
+                    subtitleVi: 'Phân loại Robusta / Arabica / Culi · Sàng S14–S18 · Chế biến NAT / HON / CBU Washed',
+                    subtitleEn: 'Robusta / Arabica / Culi · Screen S14–S18 · Natural, Honey & CBU Washed',
+                    products,
+                    lang,
+                    mode: 'green_bean',
+                    formatPrice,
+                    companySettings: settings,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 border border-[#C6A667]/60 text-[#C6A667] text-xs font-semibold rounded hover:bg-[#C6A667]/15 cursor-pointer disabled:opacity-50"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{t('In / Xuất Báo Giá (PDF)', 'Export Quote PDF')}</span>
               </button>
             </div>
           </div>

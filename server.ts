@@ -18,6 +18,7 @@ import {
   verifyPassword,
 } from './server/auth.ts';
 import { db, initDatabase, logAudit } from './server/db.ts';
+import { dispatchB2BInquiryEmail, dispatchOrderConfirmationEmail } from './server/mailer.ts';
 import { buildLiveShippingTracking } from './src/lib/shippingTracking.ts';
 import {
   buildCmsSnapshot,
@@ -2136,6 +2137,14 @@ app.post('/api/orders', (req: AuthedRequest, res) => {
         },
       };
     }
+    dispatchOrderConfirmationEmail({
+      customerEmail: created.order.customerEmail,
+      customerName: String(customerName).trim(),
+      orderNumber: created.order.orderNumber,
+      totalVnd: created.order.total,
+      paymentMethod: created.order.paymentMethod,
+      memberCode: created.membership?.memberCode,
+    });
     res.status(201).json({
       ok: true,
       order: created.order,
@@ -2524,6 +2533,14 @@ app.post('/api/gift-vouchers/checkout', (req: AuthedRequest, res) => {
       };
     }
     const { newMemberRecord: _omit, ...publicPayload } = result;
+    dispatchOrderConfirmationEmail({
+      customerEmail: publicPayload.order.customerEmail,
+      customerName: publicPayload.membership?.fullName || finalSenderName,
+      orderNumber: publicPayload.order.orderNumber,
+      totalVnd: publicPayload.order.total,
+      paymentMethod: publicPayload.order.paymentMethod,
+      memberCode: publicPayload.membership?.memberCode,
+    });
     res.status(201).json({ ok: true, ...publicPayload, ...(authPayload ? { auth: authPayload } : {}) });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Không thể khởi tạo đơn Gift Voucher.' });
@@ -2787,7 +2804,19 @@ app.post('/api/b2b/inquiries', (req, res) => {
       String(message).trim()
     );
 
-  res.status(201).json({ ok: true, inquiryId: Number(result.lastInsertRowid) });
+  const inquiryId = Number(result.lastInsertRowid);
+  dispatchB2BInquiryEmail({
+    inquiryId,
+    inquiryType,
+    companyName: String(companyName).trim(),
+    contactName: String(contactName).trim(),
+    email: String(email).trim().toLowerCase(),
+    phone: String(phone).trim(),
+    productSku: String(productSku).trim(),
+    estimatedVolume: String(estimatedVolume).trim(),
+    message: String(message).trim(),
+  });
+  res.status(201).json({ ok: true, inquiryId });
 });
 
 app.post('/api/newsletter', (req, res) => {

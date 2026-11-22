@@ -1,4 +1,5 @@
 import type { Product, CmsPageData, CoffeeOrigin, Personality } from '../context/StoreContext';
+import { getStaticProductReviews } from './staticRuntime';
 
 interface SnapshotFile {
   version: number;
@@ -197,7 +198,7 @@ export async function fetchProductBySlugWithFallback(
 
   return {
     product: mapProductRow(found),
-    reviews: [],
+    reviews: getStaticProductReviews(slug),
     related,
   };
 }

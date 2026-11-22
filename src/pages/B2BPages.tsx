@@ -349,6 +349,15 @@ export const ContactPage: React.FC = () => {
         <div className="space-y-3 text-sm text-[#202020]/80 dark:text-[#F1EFEA]/80 pt-2">
           <p><strong>{t('Khách hàng cá nhân:', 'General & Retail:')}</strong> {settings.contact_email || 'hello@roarcoffee.vn'}</p>
           <p><strong>{t('Thương mại B2B & Xuất khẩu:', 'B2B & Export:')}</strong> {settings.b2b_email || 'b2b@roarcoffee.vn'}</p>
+          <p>
+            <strong>{t('Hotline / Zalo tư vấn:', 'Hotline & Support Desk:')}</strong>{' '}
+            <a
+              href={`tel:${String(settings.hotline || '0901234567').replace(/\s+/g, '')}`}
+              className="text-[#00552B] dark:text-[#C6A667] font-mono font-semibold hover:underline"
+            >
+              {settings.hotline || '0901 234 567'}
+            </a>
+          </p>
           <p><strong>{t('Văn phòng:', 'Location:')}</strong> {lang === 'vi' ? settings.office_address_vi : settings.office_address_en}</p>
         </div>
       </div>
@@ -388,42 +397,150 @@ export const ContactPage: React.FC = () => {
 
 export const LegalPage: React.FC<{ doc: 'privacy' | 'terms' | 'shipping' }> = ({ doc }) => {
   const { lang, t } = useI18n();
-  const { cmsPages } = useStore();
+  const { cmsPages, settings } = useStore();
   const page = cmsPages[doc];
 
   const fallbackTitles = {
-    privacy: t('Chính sách Bảo mật', 'Privacy Policy'),
-    terms: t('Điều khoản Sử dụng', 'Terms & Conditions'),
-    shipping: t('Chính sách Giao hàng & Đổi trả', 'Shipping & Returns'),
+    privacy: t('Chính sách Bảo mật Thông tin', 'Privacy & Data Protection Policy'),
+    terms: t('Điều khoản Sử dụng & Giao dịch', 'Terms & Commercial Conditions'),
+    shipping: t('Chính sách Giao hàng, Freeship & Đổi trả', 'Shipping, Delivery & Returns Policy'),
   };
 
   const title = (lang === 'vi' ? page?.title_vi : page?.title_en) || fallbackTitles[doc];
   const subtitle = lang === 'vi' ? page?.subtitle_vi : page?.subtitle_en;
-  const rawBody =
-    (lang === 'vi' ? page?.body_vi : page?.body_en) ||
-    (doc === 'privacy'
-      ? t(
-          'Tài liệu chính sách pháp lý và quy định thương mại chính thức của ROAR COFFEE được cập nhật và rà soát đầy đủ trước khi vận hành thương mại chính thức.\n\nTài khoản thành viên có quyền chỉnh sửa thông tin, quản lý tùy chọn thông báo và gửi yêu cầu xóa tài khoản trực tiếp tại trang Tài khoản cá nhân.',
-          'Official ROAR COFFEE legal policies and commercial terms are structured for compliance and finalized prior to commercial launch.\n\nRegistered members may update personal profiles, adjust communication preferences, and submit account deletion requests directly from their Account portal.'
-        )
-      : doc === 'shipping'
-        ? t(
-            'Tài liệu chính sách pháp lý và quy định thương mại chính thức của ROAR COFFEE được cập nhật và rà soát đầy đủ trước khi vận hành thương mại chính thức.\n\nĐơn hàng bán lẻ được áp dụng vận chuyển tiêu chuẩn toàn quốc. Đơn hàng cà phê nhân xanh B2B áp dụng giao nhận theo điều kiện thương mại thống nhất (EXW / FOB / CIF).',
-            'Official ROAR COFFEE legal policies and commercial terms are structured for compliance and finalized prior to commercial launch.\n\nRetail orders ship via standard domestic couriers. B2B green coffee orders follow agreed commercial Incoterms and packaging specifications.'
-          )
-        : t(
-            'Tài liệu chính sách pháp lý và quy định thương mại chính thức của ROAR COFFEE được cập nhật và rà soát đầy đủ trước khi vận hành thương mại chính thức.\n\nMọi thông tin thông số kỹ thuật, niên vụ và giá bán tham chiếu tuân thủ quy trình xác thực dữ liệu của ROAR COFFEE.',
-            'Official ROAR COFFEE legal policies and commercial terms are structured for compliance and finalized prior to commercial launch.\n\nAll product specifications, harvest details, and promotional terms remain governed by verified ROAR COFFEE commercial schedules.'
-          ));
+  const cmsOverrideBody = lang === 'vi' ? page?.body_vi : page?.body_en;
 
-  const paragraphs = rawBody.split(/\n{2,}/).filter((p) => p.trim());
+  const structuredSections: Record<
+    'privacy' | 'terms' | 'shipping',
+    Array<{ headingVi: string; headingEn: string; itemsVi: string[]; itemsEn: string[] }>
+  > = {
+    privacy: [
+      {
+        headingVi: '1. Phạm vi thu thập dữ liệu khách hàng & đối tác B2B',
+        headingEn: '1. Scope of Customer & B2B Data Collection',
+        itemsVi: [
+          'Thông tin định danh khi đăng ký ROAR CLUB hoặc đặt hàng: Họ tên, Email, Số điện thoại, địa chỉ giao nhận và lịch sử giao dịch.',
+          'Thông tin doanh nghiệp B2B / HORECA khi gửi yêu cầu mẫu thử hoặc báo giá: Tên đơn vị, quốc gia, sản lượng dự kiến và cấu hình hạt quan tâm.',
+        ],
+        itemsEn: [
+          'Identity & fulfillment details collected upon ROAR CLUB registration or checkout: Full name, email, phone number, shipping address and order ledger.',
+          'B2B & HORECA inquiry context: Company name, destination market, estimated order volume and selected green/roasted specifications.',
+        ],
+      },
+      {
+        headingVi: '2. Mục đích sử dụng & bảo vệ mật khẩu',
+        headingEn: '2. Purpose of Processing & Credential Security',
+        itemsVi: [
+          'Xử lý đơn hàng bán lẻ, kích hoạt E-Voucher, ghi nhận điểm thưởng hạng thành viên (Bronze / Silver / Gold / Platinum) và cập nhật vận chuyển.',
+          'Mật khẩu tài khoản được băm (hash) trước khi lưu trữ. ROAR COFFEE tuyệt đối không bán, cho thuê hoặc chia sẻ thông tin khách hàng cho bên thứ ba ngoài đơn vị vận chuyển.',
+        ],
+        itemsEn: [
+          'Order fulfillment, E-Voucher activation, ROAR CLUB tier & point accrual (Bronze / Silver / Gold / Platinum) and live courier updates.',
+          'Account passwords are cryptographically hashed before storage. We never sell or rent customer data to unrelated third parties.',
+        ],
+      },
+      {
+        headingVi: '3. Quyền kiểm soát dữ liệu của Thành viên',
+        headingEn: '3. Member Rights & Account Controls',
+        itemsVi: [
+          'Thành viên có toàn quyền cập nhật hồ sơ, sổ địa chỉ và hủy đăng ký nhận bản tin bất cứ lúc nào tại trang Tài khoản cá nhân.',
+          `Mọi yêu cầu trích xuất hoặc xóa vĩnh viễn dữ liệu vui lòng liên hệ ${settings.contact_email || 'hello@roarcoffee.vn'}.`,
+        ],
+        itemsEn: [
+          'Members may review, update shipping addresses, or adjust communication preferences directly inside the Account portal.',
+          `For formal data export or deletion requests, contact ${settings.contact_email || 'hello@roarcoffee.vn'}.`,
+        ],
+      },
+    ],
+    shipping: [
+      {
+        headingVi: '1. Biểu phí & Chính sách Freeship đơn bán lẻ',
+        headingEn: '1. Retail Shipping Rates & Free Delivery Threshold',
+        itemsVi: [
+          `Đơn hàng từ ${Number(settings.free_shipping_threshold_vnd || 500000).toLocaleString('vi-VN')} ₫ trở lên được Miễn phí vận chuyển tiêu chuẩn toàn quốc.`,
+          `Đơn dưới ngưỡng áp dụng đồng giá ${Number(settings.standard_shipping_fee_vnd || 35000).toLocaleString('vi-VN')} ₫; Thành viên hạng Silver trở lên hưởng đặc quyền Freeship từ 300.000 ₫.`,
+        ],
+        itemsEn: [
+          `Orders of ${Number(settings.free_shipping_threshold_vnd || 500000).toLocaleString('en-US')} VND or above qualify for complimentary standard nationwide shipping.`,
+          `Orders below threshold carry a flat ${Number(settings.standard_shipping_fee_vnd || 35000).toLocaleString('en-US')} VND delivery fee; Silver+ members enjoy free shipping from 300k VND.`,
+        ],
+      },
+      {
+        headingVi: '2. Thời gian giao hàng dự kiến & Theo dõi vận đơn',
+        headingEn: '2. Estimated Transit Times & Live Tracking',
+        itemsVi: [
+          'Nội thành TP. Hồ Chí Minh & Hà Nội: 1–2 ngày làm việc kể từ khi rang/đóng gói.',
+          'Các tỉnh thành khác trên toàn quốc: 2–4 ngày làm việc. Khách hàng có thể theo dõi trạng thái thời gian thực tại mục Tra cứu đơn hàng.',
+        ],
+        itemsEn: [
+          'Metro Ho Chi Minh City & Hanoi: 1–2 business days after fresh roast packing.',
+          'Nationwide provincial destinations: 2–4 business days with real-time milestone updates via our Order Tracking page.',
+        ],
+      },
+      {
+        headingVi: '3. Đổi trả 7 ngày & Giao nhận B2B Nhân xanh',
+        headingEn: '3. 7-Day Returns & B2B Commercial Freight',
+        itemsVi: [
+          'Hỗ trợ đổi mới 100% trong vòng 7 ngày nếu bao bì rách, van một chiều lỗi, sai cỡ xay hoặc sai SKU so với đơn xác nhận.',
+          'Đơn hàng cà phê nhân xanh & xuất khẩu đóng bao 30kg / 60kg / 69kg / 1,000kg giao nhận theo điều kiện EXW / FOB / CIF cùng hồ sơ COA kèm theo.',
+        ],
+        itemsEn: [
+          'Eligible for 100% replacement within 7 days for damaged packaging, faulty degassing valves, incorrect grind size or SKU mismatch.',
+          'Commercial green coffee (30kg / 60kg / 69kg / 1,000kg) ships under agreed EXW / FOB / CIF Incoterms accompanied by lot COA.',
+        ],
+      },
+    ],
+    terms: [
+      {
+        headingVi: '1. Nguyên tắc đặt hàng, giá tham chiếu & xác thực COA',
+        headingEn: '1. Orders, Pricing Schedules & COA Integrity',
+        itemsVi: [
+          'Các sản phẩm cà phê hạt rang theo kg áp dụng bảng giá 5 mức sản lượng tự động (1kg, 5–19kg, 20–49kg, 50–99kg, ≥100kg) ngay tại giỏ hàng.',
+          'Mọi chỉ số kỹ thuật của cà phê nhân xanh (ẩm ≤12.5%, sàng S14/S16/S18, tỷ lệ hạt lỗi) được đối chiếu và xác thực theo COA từng lô mùa vụ.',
+        ],
+        itemsEn: [
+          'Roasted bean kg orders automatically calculate tier discounts across 5 volume brackets (1kg, 5–19kg, 20–49kg, 50–99kg, ≥100kg).',
+          'Green coffee lot specifications (moisture ≤12.5%, screen S14/S16/S18, defect tolerances) are backed by official seasonal COA documentation.',
+        ],
+      },
+      {
+        headingVi: '2. Quy định Ví ROAR, Điểm thưởng & Gift E-Voucher',
+        headingEn: '2. ROAR Wallet, Loyalty Points & Gift E-Vouchers',
+        itemsVi: [
+          'Số dư Ví ROAR và tiền thưởng nạp ví (+10% đến +30%) được dùng để thanh toán sản phẩm trên toàn hệ thống, không quy đổi thành tiền mặt.',
+          'Điểm thưởng được cộng sau khi đơn hàng hoàn tất (Completed) và cho phép quy đổi tối đa 30% giá trị đơn hàng tiếp theo.',
+          'Gift E-Voucher (ROAR-GIFT-...) có giá trị sử dụng một lần theo đúng mệnh giá trong thời hạn hiệu lực ghi trên thẻ.',
+        ],
+        itemsEn: [
+          'ROAR Wallet balances and top-up bonuses (+10% to +30%) are redeemable across all eligible store purchases and cannot be cashed out.',
+          'Loyalty points credit permanently once orders reach Completed status and may offset up to 30% of future retail checkouts.',
+          'Digital Gift E-Vouchers (ROAR-GIFT-...) are valid for single-order face-value redemption prior to their stated expiration date.',
+        ],
+      },
+      {
+        headingVi: '3. Ký hiệu chuyên môn & Hợp đồng OEM / Xuất khẩu',
+        headingEn: '3. Commercial Designations & OEM Contracts',
+        itemsVi: [
+          'Trên toàn hệ thống ROAR COFFEE, ký hiệu CBU biểu thị phương pháp chế biến ướt (Washed Process); Culi biểu thị phân loại hình thái học hạt tròn (Peaberry).',
+          `Mọi hợp đồng gia công OEM, nhãn riêng hoặc xuất khẩu chính ngạch được xác lập bằng văn bản thương mại thông qua ${settings.b2b_email || 'b2b@roarcoffee.vn'}.`,
+        ],
+        itemsEn: [
+          'Across ROAR COFFEE, CBU designates our official Washed Process lot standard and Culi denotes morphological single-seed peaberry classification.',
+          `All OEM roasting, private label and export orders are formalized via written commercial agreement through ${settings.b2b_email || 'b2b@roarcoffee.vn'}.`,
+        ],
+      },
+    ],
+  };
+
+  const hasCustomCms = Boolean(cmsOverrideBody && cmsOverrideBody.trim().length > 0);
+  const paragraphs = hasCustomCms ? String(cmsOverrideBody).split(/\n{2,}/).filter((p) => p.trim()) : [];
 
   return (
-    <div className="max-w-[820px] mx-auto px-6 py-14 space-y-6">
+    <div className="max-w-[860px] mx-auto px-6 py-14 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00552B] dark:text-[#C6A667]">
-            {(lang === 'vi' ? page?.eyebrow_vi : page?.eyebrow_en) || t('Pháp lý & Tuân thủ', 'Legal & Compliance')}
+            {(lang === 'vi' ? page?.eyebrow_vi : page?.eyebrow_en) || t('Pháp lý & Quy chuẩn Thương mại', 'Legal & Commercial Standards')}
           </p>
           <h1 className="text-3xl font-bold text-[#202020] dark:text-[#F1EFEA]">{title}</h1>
           {subtitle && <p className="text-sm text-[#202020]/70 dark:text-[#F1EFEA]/70">{subtitle}</p>}
@@ -431,10 +548,26 @@ export const LegalPage: React.FC<{ doc: 'privacy' | 'terms' | 'shipping' }> = ({
         <AdminPageEditLink slug={doc} />
       </div>
 
-      <div className="bg-white dark:bg-[#16221C] rounded-xl border border-[#202020]/10 dark:border-white/10 p-6 sm:p-8 space-y-4 text-sm text-[#202020]/80 dark:text-[#F1EFEA]/80 leading-relaxed">
-        {paragraphs.map((p, idx) => (
-          <p key={idx} className="whitespace-pre-line">{p}</p>
-        ))}
+      <div className="bg-white dark:bg-[#16221C] rounded-xl border border-[#202020]/10 dark:border-white/10 p-6 sm:p-8 space-y-6 text-sm text-[#202020]/80 dark:text-[#F1EFEA]/80 leading-relaxed">
+        {hasCustomCms
+          ? paragraphs.map((p, idx) => (
+              <p key={idx} className="whitespace-pre-line">{p}</p>
+            ))
+          : structuredSections[doc].map((sec, idx) => (
+              <section
+                key={idx}
+                className={idx > 0 ? 'pt-5 border-t border-[#202020]/10 dark:border-white/10 space-y-2.5' : 'space-y-2.5'}
+              >
+                <h2 className="text-base font-bold text-[#00552B] dark:text-[#C6A667]">
+                  {lang === 'vi' ? sec.headingVi : sec.headingEn}
+                </h2>
+                <ul className="space-y-2 list-disc pl-5">
+                  {(lang === 'vi' ? sec.itemsVi : sec.itemsEn).map((line, lineIdx) => (
+                    <li key={lineIdx}>{line}</li>
+                  ))}
+                </ul>
+              </section>
+            ))}
 
         {page?.sections && page.sections.length > 0 && (
           <div className="pt-4 border-t border-[#202020]/10 dark:border-white/10 space-y-4">

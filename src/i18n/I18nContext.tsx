@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { applyRouteSeo } from '../lib/routeSeo';
 
 export type Lang = 'vi' | 'en';
 
@@ -31,14 +32,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    const baseTitle =
-      lang === 'vi'
-        ? 'ROAR COFFEE® — Khơi Bản Lĩnh. Đậm Chất Riêng.'
-        : 'ROAR COFFEE® — Igniting Courage. Defining Character.';
-    const cleanPath = stripLocalePrefix(location.pathname);
-    if (!location.pathname.includes('/product/') && !location.pathname.includes('/journal/') && cleanPath !== '/about') {
-      document.title = baseTitle;
-    }
+    applyRouteSeo(location.pathname, lang);
   }, [lang, location.pathname]);
 
   const setLang = (next: Lang) => {

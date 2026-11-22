@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdaptiveLogo } from './AdaptiveLogo';
+import { PWAInstallButton } from './PWAInstallPrompt';
 import { useI18n } from '../i18n/I18nContext';
 import { useStore } from '../context/StoreContext';
 
@@ -240,10 +241,11 @@ export const Footer: React.FC = () => {
                 : settings.office_address_en || 'Ho Chi Minh City, Vietnam'}
             </p>
           </div>
-          <div className="pt-2 flex flex-wrap gap-3 text-xs text-[#F8F5EF]/75">
+          <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-[#F8F5EF]/75">
             <Link to={localePath('/contact')} className="underline underline-offset-4 hover:text-white">
               {t('Gửi yêu cầu liên hệ', 'Contact Form')}
             </Link>
+            <PWAInstallButton variant="footer" />
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Award, Bell, CheckCheck, Copy, Gift, LogOut, PlusCircle, QrCode, RefreshCw, Shield, Sparkles, Tag, UserCheck, Wallet, X } from 'lucide-react';
+import { Award, Bell, CheckCheck, Copy, Gift, LogOut, PlusCircle, Printer, QrCode, RefreshCw, Shield, Sparkles, Tag, UserCheck, Wallet, X } from 'lucide-react';
 import { useI18n } from '../i18n/I18nContext';
 import { useStore } from '../context/StoreContext';
 import { localizeLedgerEntry, localizeOrderStatus, localizePaymentStatus, localizeVariantLabel } from '../lib/i18nHelpers';
@@ -10,10 +10,11 @@ import { DailyCheckinGame } from '../components/DailyCheckinGame';
 import { MediaImage } from '../components/MediaImage';
 import { getPromoVoucherImage } from '../lib/media';
 import { getTierDisplayName, normalizeMembershipTierName } from '../lib/membershipTiers';
+import { printOrderInvoice } from '../lib/printDocuments';
 
 export const AccountPage: React.FC = () => {
   const { lang, t, localePath } = useI18n();
-  const { user, setAuthSession, clearAuthSession, apiFetch, refreshUser, formatPrice, addToCart, showToast, vcbRate } = useStore();
+  const { user, setAuthSession, clearAuthSession, apiFetch, refreshUser, formatPrice, addToCart, showToast, vcbRate, settings } = useStore();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
@@ -1115,7 +1116,38 @@ export const AccountPage: React.FC = () => {
                 )}
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#202020]/10 dark:border-white/10">
                   <span className="font-bold tabular-nums">{t('Tổng cộng:', 'Total:')} {formatPrice(o.total)}</span>
-                  <div className="flex gap-2 text-xs">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        printOrderInvoice(
+                          {
+                            orderNumber: o.order_number,
+                            createdAt: o.created_at,
+                            customerName: o.customer_name || user.fullName,
+                            customerEmail: o.customer_email || user.email,
+                            customerPhone: o.customer_phone || user.phone,
+                            shippingAddress: o.shipping_address,
+                            paymentMethod: o.payment_method,
+                            paymentStatus: localizePaymentStatus(o.payment_status, lang),
+                            orderStatus: localizeOrderStatus(o.order_status, lang),
+                            subtotal: o.subtotal,
+                            discountAmount: o.discount_amount,
+                            pointsDiscount: o.points_discount,
+                            shippingFee: o.shipping_fee,
+                            total: o.total,
+                            items: o.items || [],
+                          },
+                          lang,
+                          formatPrice,
+                          settings
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#00552B]/30 dark:border-[#C6A667]/40 text-[#00552B] dark:text-[#C6A667] rounded hover:bg-[#00552B]/5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>{t('In hóa đơn', 'Print Receipt')}</span>
+                    </button>
                     <button type="button" onClick={() => reorder(o)} className="px-3 py-1.5 bg-[#00552B] text-white rounded cursor-pointer">
                       {t('Mua lại', 'Reorder')}
                     </button>

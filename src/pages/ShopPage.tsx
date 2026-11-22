@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Gift, Heart, Search } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Gift, Heart, Printer, Search } from 'lucide-react';
 import { GiftVoucherModal } from '../components/GiftVoucherModal';
 import { MediaImage } from '../components/MediaImage';
 import { RecentlyViewedStrip } from '../components/RecentlyViewedStrip';
@@ -9,6 +9,7 @@ import { type Product, useStore } from '../context/StoreContext';
 import { parseCategoryBanners } from '../lib/categoryBanners';
 import { localizeCoffeeType } from '../lib/i18nHelpers';
 import { getTierPriceRange, resolveVolumeTier } from '../lib/pricing';
+import { printB2BQuoteSheet } from '../lib/printDocuments';
 import { fetchProductsWithFallback } from '../lib/staticFallback';
 
 interface ShopPageProps {
@@ -120,6 +121,29 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
               USD ($)
             </button>
           </div>
+
+          {category === 'roasted_beans' && products.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                printB2BQuoteSheet({
+                  titleVi: 'Bảng Báo Giá Cà Phê Hạt Rang 5 Mức Sản Lượng (kg)',
+                  titleEn: 'Roasted Coffee Beans — 5-Tier Volume Quotation (kg)',
+                  subtitleVi: 'Áp dụng cho Quán Cà Phê, HORECA, Văn Phòng & Khách Sỉ ROAR COFFEE',
+                  subtitleEn: 'Commercial wholesale schedule for Cafes, HORECA & Offices',
+                  products,
+                  lang,
+                  mode: 'roasted_beans',
+                  formatPrice,
+                  companySettings: settings,
+                })
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 border border-[#00552B] dark:border-[#C6A667] text-[#00552B] dark:text-[#C6A667] text-[11px] sm:text-xs font-semibold rounded hover:bg-[#00552B]/8 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{t('In Báo Giá Kg (PDF)', 'Export Kg Quote')}</span>
+            </button>
+          )}
 
           <Link
             to={localePath('/coffee/green-beans')}

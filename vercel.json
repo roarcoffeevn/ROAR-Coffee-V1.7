@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|roar-snapshot\\.json|og-thumbnail\\.svg|favicon|manifest).*)",
+      "source": "/((?!api/|assets/|roar-snapshot\\.json|og-thumbnail\\.svg|robots\\.txt|sitemap\\.xml|pwa-.*\\.png|apple-touch-icon\\.png|sw\\.js|workbox-.*\\.js|registerSW\\.js|favicon|manifest).*)",
       "destination": "/index.html"
     }
   ],

@@ -177,7 +177,7 @@ export const DEFAULT_HERO_METRICS: HeroMetricConfig[] = [
     titleEn: 'Vietnam Highland Origins',
     subVi: 'Cầu Đất 1.500m · Buôn Ma Thuột',
     subEn: 'Cau Dat 1,500m · Buon Ma Thuot',
-    to: '/regions',
+    to: '/origins',
   },
   {
     id: 'hm-6',
@@ -187,7 +187,7 @@ export const DEFAULT_HERO_METRICS: HeroMetricConfig[] = [
     titleEn: 'Fresh Roast · COA Verified',
     subVi: 'Không tẩm ướp · Ẩm ≤12.5%',
     subEn: 'Pure roast · Moisture ≤12.5%',
-    to: '/quality',
+    to: '/farm-to-cup',
   },
   {
     id: 'hm-7',

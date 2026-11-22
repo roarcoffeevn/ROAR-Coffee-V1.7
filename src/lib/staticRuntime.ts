@@ -39,6 +39,7 @@ interface StaticRuntimeState {
   createdProducts: any[];
   walletTransactions: any[];
   checkins: Record<number, { streak: number; lastCheckinDate: string; history: any[] }>;
+  productReviews?: Record<string, any[]>;
 }
 
 function getDefaultUsers(): StaticUserRecord[] {
@@ -266,6 +267,7 @@ function readState(): StaticRuntimeState {
         createdProducts: Array.isArray(parsed.createdProducts) ? parsed.createdProducts : [],
         walletTransactions: Array.isArray(parsed.walletTransactions) ? parsed.walletTransactions : [],
         checkins: parsed.checkins && typeof parsed.checkins === 'object' ? parsed.checkins : {},
+        productReviews: parsed.productReviews && typeof parsed.productReviews === 'object' ? parsed.productReviews : {},
       };
     }
   } catch {
@@ -281,7 +283,14 @@ function readState(): StaticRuntimeState {
     createdProducts: [],
     walletTransactions: [],
     checkins: {},
+    productReviews: {},
   };
+}
+
+export function getStaticProductReviews(slug: string): any[] {
+  const st = readState();
+  const list = st.productReviews?.[slug];
+  return Array.isArray(list) ? list : [];
 }
 
 function writeState(state: StaticRuntimeState): void {
@@ -2013,6 +2022,48 @@ export async function handleStaticApiFallback(
       checkedInToday: true,
       schedule: CHECKIN_SCHEDULE,
     });
+  }
+
+  // Product Customer Reviews (Static Vercel Persistence)
+  const reviewMatch = pathname.match(/^\/api\/products\/([^/]+)\/reviews$/);
+  if (reviewMatch && method === 'POST') {
+    const me = resolveTokenUser(headers, state);
+    if (!me) return jsonResponse({ error: 'Vui lòng đăng nhập để gửi đánh giá.' }, 401);
+    const slug = decodeURIComponent(reviewMatch[1]);
+    const r = Number(body.rating);
+    const comment = String(body.comment || '').trim();
+    if (!Number.isInteger(r) || r < 1 || r > 5 || comment.length < 5) {
+      return jsonResponse({ error: 'Vui lòng chọn sao (1–5) và nhập nhận xét tối thiểu 5 ký tự.' }, 400);
+    }
+    const snap = await loadStaticSnapshot();
+    const matchedProduct = (snap?.tables?.products || []).find((p: any) => p.slug === slug);
+    const reviewsMap = state.productReviews || {};
+    const existingList = Array.isArray(reviewsMap[slug]) ? reviewsMap[slug] : [];
+    const hasPurchased = state.orders.some(
+      (o) =>
+        (o.user_id === me.id || String(o.customer_email || '').toLowerCase() === me.email.toLowerCase()) &&
+        o.order_status === 'Completed' &&
+        Array.isArray(o.items) &&
+        o.items.some(
+          (it: any) =>
+            (matchedProduct && (it.product_id === matchedProduct.id || it.sku === matchedProduct.sku)) ||
+            String(it.product_slug || '').toLowerCase() === slug.toLowerCase()
+        )
+    );
+    const entry = {
+      id: Date.now(),
+      product_slug: slug,
+      user_id: me.id,
+      author_name: me.fullName,
+      rating: r,
+      comment,
+      verified_purchase: hasPurchased ? 1 : 0,
+      created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    };
+    reviewsMap[slug] = [entry, ...existingList];
+    state.productReviews = reviewsMap;
+    writeState(state);
+    return jsonResponse({ ok: true, review: entry }, 201);
   }
 
   return null;

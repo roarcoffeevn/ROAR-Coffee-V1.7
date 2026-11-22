@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, ChevronDown, Menu, Monitor, Moon, Search, ShoppingBag, Sun, User, X, Phone, Mail } from 'lucide-react';
 import { AdaptiveLogo } from './AdaptiveLogo';
+import { PWAInstallButton } from './PWAInstallPrompt';
 import { stripLocalePrefix, useI18n } from '../i18n/I18nContext';
 import { useStore } from '../context/StoreContext';
 
 export const Header: React.FC = () => {
   const { lang, setLang, t, localePath } = useI18n();
-  const { cartCount, setCartOpen, user, theme, themeMode, setThemeMode, toggleTheme } = useStore();
+  const { cartCount, setCartOpen, user, theme, themeMode, setThemeMode, toggleTheme, settings } = useStore();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const cleanPath = stripLocalePrefix(pathname);
@@ -896,9 +897,14 @@ export const Header: React.FC = () => {
                 <span>{user ? user.fullName : t('Đăng nhập / Thành viên', 'Member Sign In')}</span>
               </Link>
 
+              <PWAInstallButton variant="drawer" />
+
               <div className="flex items-center justify-between text-xs text-[#202020]/70 dark:text-[#F1EFEA]/70 pt-1">
-                <a href="mailto:hello@roarcoffee.vn" className="flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5" /> hello@roarcoffee.vn
+                <a
+                  href={`mailto:${settings.contact_email || 'hello@roarcoffee.vn'}`}
+                  className="flex items-center gap-1"
+                >
+                  <Mail className="w-3.5 h-3.5" /> {settings.contact_email || 'hello@roarcoffee.vn'}
                 </a>
                 <Link to={localePath('/contact')} onClick={closeAll} className="flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5" /> {t('Hỗ trợ', 'Support')}

@@ -7,6 +7,7 @@ import { FloatingAssistDock } from './components/FloatingAssistDock';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { OfflineIndicator } from './components/PWAInstallPrompt';
 import { StoreProvider } from './context/StoreContext';
 import { I18nProvider, stripLocalePrefix, useI18n } from './i18n/I18nContext';
 import { AccountPage } from './pages/AccountPage';
@@ -17,6 +18,7 @@ import { CartPage, CheckoutPage, OrderTrackPage } from './pages/CartCheckoutPage
 import { GreenCoffeePage } from './pages/GreenCoffeePage';
 import { HomePage } from './pages/HomePage';
 import { JournalArticlePage, JournalPage, PromotionsPage } from './pages/JournalPromotionsPages';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { PersonalitiesPage } from './pages/PersonalitiesPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ShopPage } from './pages/ShopPage';
@@ -148,7 +150,9 @@ function renderPublicRoutes() {
     <Route path="personalities" element={<PersonalitiesPage />} />
     <Route path="personalities/:slug" element={<PersonalitiesPage />} />
     <Route path="origins" element={<OriginsPage />} />
+    <Route path="regions" element={<OriginsPage />} />
     <Route path="farm-to-cup" element={<FarmToCupPage />} />
+    <Route path="quality" element={<FarmToCupPage />} />
     <Route path="brewing" element={<BrewingGuidePage />} />
     <Route path="brewing-handbook" element={<BrewingHandbookPage />} />
     <Route path="brewing-handbook/:slug" element={<BrewingHandbookPage />} />
@@ -170,6 +174,7 @@ function renderPublicRoutes() {
     <Route path="privacy" element={<LegalPage doc="privacy" />} />
     <Route path="terms" element={<LegalPage doc="terms" />} />
     <Route path="shipping" element={<LegalPage doc="shipping" />} />
+    <Route path="*" element={<NotFoundPage />} />
     </>
   );
 }
@@ -197,12 +202,13 @@ function AppLayout() {
           <Route path="/">{renderPublicRoutes()}</Route>
           <Route path="/vi">{renderPublicRoutes()}</Route>
           <Route path="/en">{renderPublicRoutes()}</Route>
-          <Route path="*" element={<HomePage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
       <Footer />
       <MobileBottomNav />
       <FloatingAssistDock />
+      <OfflineIndicator />
       <CartDrawer />
     </div>
   );

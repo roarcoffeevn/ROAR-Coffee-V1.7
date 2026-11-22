@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Expand, Gift, Heart, ShieldAlert, Star, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, ChevronLeft, ChevronRight, Expand, Gift, Heart, HelpCircle, ShieldAlert, Star, X } from 'lucide-react';
 import { B2BInquiryModal } from '../components/B2BInquiryModal';
 import { GiftVoucherModal } from '../components/GiftVoucherModal';
 import { RecentlyViewedStrip, recordRecentlyViewed } from '../components/RecentlyViewedStrip';
@@ -10,6 +10,7 @@ import { type Product, useStore } from '../context/StoreContext';
 import { getProductGallery } from '../lib/media';
 import { localizeBrewingMethod, localizeCoffeeType, localizeVariantLabel } from '../lib/i18nHelpers';
 import { resolveVolumeTier } from '../lib/pricing';
+import { updateCustomSeoHead, upsertJsonLd } from '../lib/routeSeo';
 import { fetchProductBySlugWithFallback, fetchProductsWithFallback } from '../lib/staticFallback';
 
 export const ProductDetailPage: React.FC = () => {
@@ -44,6 +45,7 @@ export const ProductDetailPage: React.FC = () => {
   const [giftModalOpen, setGiftModalOpen] = useState(false);
   const [giftModalMode, setGiftModalMode] = useState<'self' | 'gift'>('gift');
   const [voucherCatalog, setVoucherCatalog] = useState<Product[]>([]);
+  const [openFaqIdx, setOpenFaqIdx] = useState<number | null>(0);
 
   const fetchProduct = () => {
     if (!slug) return;
@@ -86,8 +88,135 @@ export const ProductDetailPage: React.FC = () => {
       catNode,
       { labelVi: product.name_vi, labelEn: product.name_en },
     ]);
-    return () => setCustomBreadcrumb(null);
-  }, [product, setCustomBreadcrumb]);
+
+    const pTitle = `${lang === 'vi' ? product.name_vi : product.name_en} (${product.sku}) | ROAR COFFEE®`;
+    const pDesc =
+      (lang === 'vi' ? product.description_vi : product.description_en)?.slice(0, 155) ||
+      (lang === 'vi'
+        ? `${product.name_vi} chính hãng ROAR COFFEE® — rang mộc chuẩn COA, giao hàng toàn quốc.`
+        : `${product.name_en} by ROAR COFFEE® — fresh Vietnamese roast & verified COA standards.`);
+    updateCustomSeoHead({
+      title: pTitle,
+      description: pDesc,
+      pathname: typeof window !== 'undefined' ? window.location.pathname : `/product/${product.slug}`,
+      type: 'product',
+    });
+
+    const isGreenItem = product.category === 'green_bean';
+    const isVoucherItem = product.sub_category === 'Gift Voucher' || product.slug.startsWith('gift-voucher-');
+    const faqItems = isGreenItem
+      ? [
+          {
+            q: t('Ký hiệu CBU và Culi trong thông số lô hàng có nghĩa là gì?', 'What do CBU and Culi mean in lot specifications?'),
+            a: t(
+              'CBU là ký hiệu thương mại chính thức của ROAR COFFEE cho phương pháp chế biến ướt (Washed Process). Culi dùng để chỉ phân loại hình thái học hạt tròn đơn nhân (Peaberry), không phải loài thực vật riêng.',
+              'CBU is ROAR COFFEE’s official commercial designation for Washed Process. Culi denotes single-seed peaberry morphology rather than a separate botanical species.'
+            ),
+          },
+          {
+            q: t('ROAR COFFEE có hỗ trợ gửi mẫu thử và cung cấp COA theo lô không?', 'Do you provide green sample lots and COA reports?'),
+            a: t(
+              'Có. Đối tác rang xay có thể nhấn "Yêu cầu mẫu thử" ngay trên trang để nhận mẫu test ẩm (≤12.5%), tỷ trọng, cỡ sàng và phiếu COA theo mùa vụ.',
+              'Yes. Roasters may click Request Sample on this page to evaluate moisture (≤12.5%), screen distribution, density and verified COA paperwork.'
+            ),
+          },
+          {
+            q: t('Quy cách đóng bao thương mại và điều kiện xuất khẩu áp dụng thế nào?', 'What packaging weights and commercial Incoterms are supported?'),
+            a: t(
+              'Chúng tôi đóng bao đay / GrainPro 30kg, 60kg, 69kg hoặc bao jumbo 1,000kg theo điều kiện EXW, FOB hoặc CIF thỏa thuận trong hợp đồng.',
+              'Standard commercial lots ship in 30kg, 60kg, 69kg jute/GrainPro bags or 1,000kg jumbo totes under EXW, FOB or CIF Incoterms.'
+            ),
+          },
+        ]
+      : isVoucherItem
+        ? [
+            {
+              q: t('Gift E-Voucher ROAR được gửi tới người nhận bằng cách nào?', 'How is a ROAR Gift E-Voucher delivered?'),
+              a: t(
+                'Sau khi thanh toán xác nhận, mã ROAR-GIFT-... được kích hoạt ngay để gửi qua Email hoặc SMS/Zalo kèm lời chúc riêng của bạn.',
+                'Once payment settles, the unique ROAR-GIFT-... voucher code activates for instant delivery via Email or SMS/Zalo.'
+              ),
+            },
+            {
+              q: t('Cách sử dụng mã Gift E-Voucher khi mua hàng?', 'How do recipients redeem their Gift E-Voucher?'),
+              a: t(
+                'Người nhận chỉ cần nhập mã ROAR-GIFT-... vào ô "Áp dụng Voucher" tại bước Thanh toán để trừ trực tiếp đúng mệnh giá vào đơn hàng.',
+                'Enter the ROAR-GIFT-... code in the Checkout Promo Code field to deduct its full face value directly from the order.'
+              ),
+            },
+          ]
+        : [
+            {
+              q: t('Nên chọn Cà phê Nguyên hạt (Whole Bean) hay Xay sẵn cho Phin / Espresso?', 'Should I choose Whole Bean or pre-ground for Phin / Espresso?'),
+              a: t(
+                'Nếu có máy xay tại nhà hoặc quán, hãy chọn Nguyên hạt để giữ tối đa hương thơm lâu hơn. Nếu pha ngay, bạn có thể chọn sẵn cỡ xay Phin (vừa-thô) hoặc Espresso (mịn) ngay trong tùy chọn.',
+                'Choose Whole Bean if you grind fresh on demand. Otherwise, select our calibrated Phin (medium-coarse) or Espresso (fine) grind option above.'
+              ),
+            },
+            {
+              q: t('Cà phê ROAR rang mộc bảo quản được bao lâu để giữ trọn hương vị?', 'How should ROAR fresh-roasted coffee be stored and what is its shelf life?'),
+              a: t(
+                'Cà phê được đóng túi van một chiều chống oxy hóa, hạn sử dụng 12 tháng kể từ ngày rang. Hương vị đạt đỉnh trong 1–8 tuần đầu ở nơi khô ráo, tránh ánh nắng trực tiếp.',
+                'Packed in one-way degassing valve bags with a 12-month shelf life. Peak aromatics shine within weeks 1–8 when kept sealed in a cool, dark cupboard.'
+              ),
+            },
+            {
+              q: t('Mua số lượng lớn theo kg cho quán/văn phòng có được chiết khấu tự động không?', 'Do bulk kg orders for cafes and offices receive automatic tier discounts?'),
+              a: t(
+                'Với dòng Cà phê Hạt rang theo kg, hệ thống tự động áp dụng bảng giá 5 nấc sản lượng (1kg, 5–19kg, 20–49kg, 50–99kg và ≥100kg) ngay khi tăng số lượng hoặc trong giỏ hàng.',
+                'Yes. All roasted-bean kg SKUs automatically calculate 5 volume pricing tiers (1kg, 5–19kg, 20–49kg, 50–99kg and ≥100kg) in real time.'
+              ),
+            },
+          ];
+
+    const avgRating =
+      reviews.length > 0
+        ? Number((reviews.reduce((sum, r) => sum + Number(r.rating || 5), 0) / reviews.length).toFixed(1))
+        : null;
+
+    upsertJsonLd('roar-product-jsonld', {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: lang === 'vi' ? product.name_vi : product.name_en,
+      sku: product.sku,
+      description: pDesc,
+      brand: { '@type': 'Brand', name: 'ROAR COFFEE' },
+      offers: {
+        '@type': 'Offer',
+        priceCurrency: 'VND',
+        price: String(product.price_vnd || 0),
+        availability: 'https://schema.org/InStock',
+      },
+      ...(avgRating
+        ? {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: String(avgRating),
+              reviewCount: String(reviews.length),
+            },
+          }
+        : {}),
+    });
+
+    upsertJsonLd('roar-faq-jsonld', {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqItems.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: item.a,
+        },
+      })),
+    });
+
+    return () => {
+      setCustomBreadcrumb(null);
+      upsertJsonLd('roar-product-jsonld', null);
+      upsertJsonLd('roar-faq-jsonld', null);
+    };
+  }, [product, lang, reviews, setCustomBreadcrumb, t]);
 
   if (loading) {
     return <div className="max-w-[1280px] mx-auto px-6 py-20 text-center text-sm">{t('Đang tải sản phẩm...', 'Loading product...')}</div>;
@@ -765,6 +894,110 @@ export const ProductDetailPage: React.FC = () => {
           </form>
         </div>
       </section>
+
+      {/* Product & Coffee Knowledge FAQ Accordion */}
+      {(() => {
+        const isGreenItem = product.category === 'green_bean';
+        const isVoucherItem = product.sub_category === 'Gift Voucher' || product.slug.startsWith('gift-voucher-');
+        const faqList = isGreenItem
+          ? [
+              {
+                q: t('Ký hiệu CBU và Culi trong thông số lô hàng có nghĩa là gì?', 'What do CBU and Culi mean in lot specifications?'),
+                a: t(
+                  'CBU là ký hiệu thương mại chính thức của ROAR COFFEE cho phương pháp chế biến ướt (Washed Process). Culi dùng để chỉ phân loại hình thái học hạt tròn đơn nhân (Peaberry), không phải loài thực vật riêng.',
+                  'CBU is ROAR COFFEE’s official commercial designation for Washed Process. Culi denotes single-seed peaberry morphology rather than a separate botanical species.'
+                ),
+              },
+              {
+                q: t('ROAR COFFEE có hỗ trợ gửi mẫu thử và cung cấp COA theo lô không?', 'Do you provide green sample lots and COA reports?'),
+                a: t(
+                  'Có. Đối tác rang xay có thể nhấn "Yêu cầu mẫu thử" ngay trên trang để nhận mẫu test ẩm (≤12.5%), tỷ trọng, cỡ sàng và phiếu COA theo mùa vụ.',
+                  'Yes. Roasters may click Request Sample on this page to evaluate moisture (≤12.5%), screen distribution, density and verified COA paperwork.'
+                ),
+              },
+              {
+                q: t('Quy cách đóng bao thương mại và điều kiện xuất khẩu áp dụng thế nào?', 'What packaging weights and commercial Incoterms are supported?'),
+                a: t(
+                  'Chúng tôi đóng bao đay / GrainPro 30kg, 60kg, 69kg hoặc bao jumbo 1,000kg theo điều kiện EXW, FOB hoặc CIF thỏa thuận trong hợp đồng.',
+                  'Standard commercial lots ship in 30kg, 60kg, 69kg jute/GrainPro bags or 1,000kg jumbo totes under EXW, FOB or CIF Incoterms.'
+                ),
+              },
+            ]
+          : isVoucherItem
+            ? [
+                {
+                  q: t('Gift E-Voucher ROAR được gửi tới người nhận bằng cách nào?', 'How is a ROAR Gift E-Voucher delivered?'),
+                  a: t(
+                    'Sau khi thanh toán xác nhận, mã ROAR-GIFT-... được kích hoạt ngay để gửi qua Email hoặc SMS/Zalo kèm lời chúc riêng của bạn.',
+                    'Once payment settles, the unique ROAR-GIFT-... voucher code activates for instant delivery via Email or SMS/Zalo.'
+                  ),
+                },
+                {
+                  q: t('Cách sử dụng mã Gift E-Voucher khi mua hàng?', 'How do recipients redeem their Gift E-Voucher?'),
+                  a: t(
+                    'Người nhận chỉ cần nhập mã ROAR-GIFT-... vào ô "Áp dụng Voucher" tại bước Thanh toán để trừ trực tiếp đúng mệnh giá vào đơn hàng.',
+                    'Enter the ROAR-GIFT-... code in the Checkout Promo Code field to deduct its full face value directly from the order.'
+                  ),
+                },
+              ]
+            : [
+                {
+                  q: t('Nên chọn Cà phê Nguyên hạt (Whole Bean) hay Xay sẵn cho Phin / Espresso?', 'Should I choose Whole Bean or pre-ground for Phin / Espresso?'),
+                  a: t(
+                    'Nếu có máy xay tại nhà hoặc quán, hãy chọn Nguyên hạt để giữ tối đa hương thơm lâu hơn. Nếu pha ngay, bạn có thể chọn sẵn cỡ xay Phin (vừa-thô) hoặc Espresso (mịn) ngay trong tùy chọn.',
+                    'Choose Whole Bean if you grind fresh on demand. Otherwise, select our calibrated Phin (medium-coarse) or Espresso (fine) grind option above.'
+                  ),
+                },
+                {
+                  q: t('Cà phê ROAR rang mộc bảo quản được bao lâu để giữ trọn hương vị?', 'How should ROAR fresh-roasted coffee be stored and what is its shelf life?'),
+                  a: t(
+                    'Cà phê được đóng túi van một chiều chống oxy hóa, hạn sử dụng 12 tháng kể từ ngày rang. Hương vị đạt đỉnh trong 1–8 tuần đầu ở nơi khô ráo, tránh ánh nắng trực tiếp.',
+                    'Packed in one-way degassing valve bags with a 12-month shelf life. Peak aromatics shine within weeks 1–8 when kept sealed in a cool, dark cupboard.'
+                  ),
+                },
+                {
+                  q: t('Mua số lượng lớn theo kg cho quán/văn phòng có được chiết khấu tự động không?', 'Do bulk kg orders for cafes and offices receive automatic tier discounts?'),
+                  a: t(
+                    'Với dòng Cà phê Hạt rang theo kg, hệ thống tự động áp dụng bảng giá 5 nấc sản lượng (1kg, 5–19kg, 20–49kg, 50–99kg và ≥100kg) ngay khi tăng số lượng hoặc trong giỏ hàng.',
+                    'Yes. All roasted-bean kg SKUs automatically calculate 5 volume pricing tiers (1kg, 5–19kg, 20–49kg, 50–99kg and ≥100kg) in real time.'
+                  ),
+                },
+              ];
+
+        return (
+          <section className="bg-white dark:bg-[#16221C] rounded-xl border border-[#202020]/10 dark:border-white/10 p-6 sm:p-8 space-y-5">
+            <div className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-[#00552B] dark:text-[#C6A667]" />
+              <h2 className="text-2xl font-bold text-[#202020] dark:text-[#F1EFEA]">
+                {t('Câu hỏi Thường gặp Về Sản phẩm', 'Product & Brewing FAQ')}
+              </h2>
+            </div>
+            <div className="divide-y divide-[#202020]/10 dark:divide-white/10">
+              {faqList.map((item, idx) => {
+                const isOpen = openFaqIdx === idx;
+                return (
+                  <div key={idx} className="py-3.5 first:pt-1 last:pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenFaqIdx(isOpen ? null : idx)}
+                      aria-expanded={isOpen}
+                      className="w-full flex items-center justify-between gap-4 text-left text-sm font-semibold text-[#202020] dark:text-[#F1EFEA] hover:text-[#00552B] dark:hover:text-[#C6A667] cursor-pointer"
+                    >
+                      <span>{item.q}</span>
+                      <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#00552B] dark:text-[#C6A667]' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <p className="mt-2 text-sm text-[#202020]/75 dark:text-[#F1EFEA]/75 leading-relaxed">
+                        {item.a}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Related Products */}
       {related.length > 0 && (

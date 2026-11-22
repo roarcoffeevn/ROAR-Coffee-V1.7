@@ -11,6 +11,7 @@ import {
   Minus,
   Package,
   Plus,
+  Printer,
   QrCode,
   RefreshCw,
   ShieldCheck,
@@ -24,8 +25,9 @@ import { MediaImage } from '../components/MediaImage';
 import { RecentlyViewedStrip } from '../components/RecentlyViewedStrip';
 import { useI18n } from '../i18n/I18nContext';
 import { useStore } from '../context/StoreContext';
-import { localizeOrderStatus, localizeVariantLabel } from '../lib/i18nHelpers';
+import { localizeOrderStatus, localizePaymentStatus, localizeVariantLabel } from '../lib/i18nHelpers';
 import { calculateShippingFee } from '../lib/pricing';
+import { printOrderInvoice } from '../lib/printDocuments';
 import { buildLiveShippingTracking, type LiveShippingTracking } from '../lib/shippingTracking';
 import { fetchPromotionsWithFallback } from '../lib/staticFallback';
 
@@ -535,6 +537,7 @@ export const CheckoutPage: React.FC = () => {
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<any>(null);
+  const [confirmedItems, setConfirmedItems] = useState<any[]>([]);
   const [confirmedMembership, setConfirmedMembership] = useState<any>(null);
 
   useEffect(() => {
@@ -598,8 +601,18 @@ export const CheckoutPage: React.FC = () => {
           notes,
         }),
       });
+      const snapshotItems = cart.map((c) => ({
+        sku: c.sku,
+        product_name_vi: c.nameVi,
+        product_name_en: c.nameEn,
+        variant_label: c.variantLabel,
+        quantity: c.quantity,
+        unit_price_vnd: c.unitPriceVnd,
+        line_total_vnd: c.unitPriceVnd * c.quantity,
+      }));
       const d = await res.json();
       if (res.ok) {
+        setConfirmedItems(snapshotItems);
         setConfirmedOrder(d.order);
         setConfirmedMembership(d.membership || null);
         clearCart();
@@ -675,6 +688,34 @@ export const CheckoutPage: React.FC = () => {
           />
 
           <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() =>
+                printOrderInvoice(
+                  {
+                    orderNumber: confirmedOrder.orderNumber,
+                    customerName,
+                    customerEmail: confirmedOrder.customerEmail || customerEmail,
+                    customerPhone,
+                    shippingAddress,
+                    paymentMethod: confirmedOrder.paymentMethod || paymentMethod,
+                    subtotal: confirmedOrder.subtotal ?? cartSubtotalVnd,
+                    discountAmount: confirmedOrder.discountAmount ?? 0,
+                    pointsDiscount: confirmedOrder.pointsDiscount ?? 0,
+                    shippingFee: confirmedOrder.shippingFee ?? 0,
+                    total: confirmedOrder.total,
+                    items: confirmedItems,
+                  },
+                  lang,
+                  formatPrice,
+                  settings
+                )
+              }
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 border border-[#00552B] dark:border-[#C6A667] text-[#00552B] dark:text-[#C6A667] text-xs font-semibold rounded hover:bg-[#00552B]/5 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>{t('In hóa đơn / Lưu PDF', 'Print Receipt / Save PDF')}</span>
+            </button>
             <Link to={localePath('/orders/track')} className="px-5 py-2.5 bg-[#00552B] text-white text-xs font-semibold rounded">
               {t('Tra cứu đơn hàng', 'Track Order')}
             </Link>
@@ -1092,7 +1133,7 @@ export const CheckoutPage: React.FC = () => {
 
 export const OrderTrackPage: React.FC = () => {
   const { t, lang } = useI18n();
-  const { formatPrice, apiFetch, user } = useStore();
+  const { formatPrice, apiFetch, user, settings } = useStore();
   const [searchParams] = useSearchParams();
 
   // Dedicated Section State: Real-Time Shipping Status & Estimated Arrival (Order ID + Email)
@@ -1588,9 +1629,42 @@ export const OrderTrackPage: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  <div className="flex justify-between font-bold pt-3 border-t border-[#202020]/10 dark:border-white/10">
-                    <span>{t('Tổng đơn', 'Total')}</span>
-                    <span className="tabular-nums">{formatPrice(order.total)}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-3 font-bold pt-3 border-t border-[#202020]/10 dark:border-white/10">
+                    <div className="flex items-center gap-3">
+                      <span>{t('Tổng đơn', 'Total')}:</span>
+                      <span className="tabular-nums text-[#00552B] dark:text-[#C6A667]">{formatPrice(order.total)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        printOrderInvoice(
+                          {
+                            orderNumber: order.order_number,
+                            createdAt: order.created_at,
+                            customerName: order.customer_name,
+                            customerEmail: order.customer_email,
+                            customerPhone: order.customer_phone,
+                            shippingAddress: order.shipping_address,
+                            paymentMethod: order.payment_method,
+                            paymentStatus: localizePaymentStatus(order.payment_status, lang),
+                            orderStatus: localizeOrderStatus(order.order_status, lang),
+                            subtotal: order.subtotal,
+                            discountAmount: order.discount_amount,
+                            pointsDiscount: order.points_discount,
+                            shippingFee: order.shipping_fee,
+                            total: order.total,
+                            items: order.items || [],
+                          },
+                          lang,
+                          formatPrice,
+                          settings
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#00552B]/30 dark:border-[#C6A667]/40 text-[#00552B] dark:text-[#C6A667] text-xs font-semibold hover:bg-[#00552B]/5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>{t('In hóa đơn', 'Print Receipt')}</span>
+                    </button>
                   </div>
 
                   {Array.isArray(order.gift_dispatches) && order.gift_dispatches.length > 0 && (
