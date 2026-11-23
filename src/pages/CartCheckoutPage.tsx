@@ -7,6 +7,8 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  Gamepad2,
+  Gift,
   MapPin,
   Minus,
   Package,
@@ -532,8 +534,10 @@ export const CheckoutPage: React.FC = () => {
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherDiscount, setVoucherDiscount] = useState(0);
   const [appliedVoucherType, setAppliedVoucherType] = useState<string>('');
+  const [appliedPromoMeta, setAppliedPromoMeta] = useState<any>(null);
   const [voucherMsg, setVoucherMsg] = useState('');
   const [availablePromos, setAvailablePromos] = useState<any[]>([]);
+  const [myGameClaims, setMyGameClaims] = useState<any[]>([]);
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<any>(null);
@@ -546,16 +550,40 @@ export const CheckoutPage: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      setMyGameClaims([]);
+      return;
+    }
+    apiFetch('/api/games')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const claims = Array.isArray(d?.myClaims)
+          ? d.myClaims.filter(
+              (c: any) =>
+                c.status === 'active' &&
+                (c.reward_type === 'product_gift' ||
+                  c.reward_type === 'voucher_percent' ||
+                  c.reward_type === 'voucher_fixed' ||
+                  c.reward_type === 'free_shipping')
+            )
+          : [];
+        setMyGameClaims(claims);
+      })
+      .catch(() => {});
+  }, [user, apiFetch]);
+
   const availablePoints = user?.points?.available || 0;
   const maxRedeemPoints = Math.min(availablePoints, Math.floor((cartSubtotalVnd * 0.3) / 100));
   const pointsDiscount = pointsToRedeem * 100;
   const shippingCalc = calculateShippingFee(cartSubtotalVnd, settings);
   const shippingFee = appliedVoucherType === 'free_shipping' ? 0 : shippingCalc.feeVnd;
-  const effectiveVoucherDiscount = appliedVoucherType === 'free_shipping' ? 0 : voucherDiscount;
+  const effectiveVoucherDiscount =
+    appliedVoucherType === 'free_shipping' || appliedVoucherType === 'product_gift' ? 0 : voucherDiscount;
   const grandTotal = Math.max(0, cartSubtotalVnd - effectiveVoucherDiscount - pointsDiscount + shippingFee);
   const selectedPaymentOption = getPaymentOption(paymentMethod);
 
-  const applyVoucher = async (overrideCode?: string) => {
+  const applyVoucher = useCallback(async (overrideCode?: string) => {
     const codeToUse = (overrideCode ?? voucherCode).trim();
     if (!codeToUse) return;
     if (overrideCode !== undefined) setVoucherCode(codeToUse);
@@ -567,18 +595,39 @@ export const CheckoutPage: React.FC = () => {
     const d = await res.json().catch(() => ({}));
     if (res.ok && d.valid) {
       setVoucherDiscount(d.discountAmount || 0);
-      setAppliedVoucherType(d.promo?.discount_type || '');
-      setVoucherMsg(
-        d.promo?.discount_type === 'free_shipping'
-          ? t(`Đã áp dụng mã ${d.promo.code} (Miễn phí vận chuyển)`, `Applied ${d.promo.code} (Free Shipping)`)
-          : t(`Đã áp dụng mã ${d.promo.code} (-${formatPrice(d.discountAmount)})`, `Applied ${d.promo.code} (-${formatPrice(d.discountAmount)})`)
-      );
+      const dtype = d.promo?.discount_type || '';
+      setAppliedVoucherType(dtype);
+      setAppliedPromoMeta(d.promo || null);
+      if (dtype === 'free_shipping') {
+        setVoucherMsg(t(`Đã áp dụng mã ${d.promo.code} (Miễn phí vận chuyển)`, `Applied ${d.promo.code} (Free Shipping)`));
+      } else if (dtype === 'product_gift') {
+        const giftTitle = lang === 'vi' ? d.promo.gift_product_name_vi || d.promo.title_vi : d.promo.gift_product_name_en || d.promo.title_en;
+        setVoucherMsg(t(`Đã đính kèm Quà tặng miễn phí: ${giftTitle}`, `Attached Free Gift: ${giftTitle}`));
+      } else {
+        setVoucherMsg(
+          t(`Đã áp dụng mã ${d.promo.code} (-${formatPrice(d.discountAmount)})`, `Applied ${d.promo.code} (-${formatPrice(d.discountAmount)})`)
+        );
+      }
     } else {
       setVoucherDiscount(0);
       setAppliedVoucherType('');
+      setAppliedPromoMeta(null);
       setVoucherMsg(d.error || t('Mã không hợp lệ', 'Invalid code'));
     }
-  };
+  }, [apiFetch, cartSubtotalVnd, formatPrice, lang, t, voucherCode]);
+
+  useEffect(() => {
+    if (cartSubtotalVnd <= 0) return;
+    try {
+      const pending = window.sessionStorage.getItem('roar_pending_promo');
+      if (pending) {
+        window.sessionStorage.removeItem('roar_pending_promo');
+        applyVoucher(pending);
+      }
+    } catch {
+      // ignore storage access issues
+    }
+  }, [cartSubtotalVnd, applyVoucher]);
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -595,7 +644,10 @@ export const CheckoutPage: React.FC = () => {
           shippingAddress,
           currency,
           items: cart.map((c) => ({ productId: c.productId, variantLabel: c.variantLabel, quantity: c.quantity })),
-          voucherCode: voucherDiscount > 0 ? voucherCode.trim() : '',
+          voucherCode:
+            voucherDiscount > 0 || appliedVoucherType === 'free_shipping' || appliedVoucherType === 'product_gift'
+              ? voucherCode.trim()
+              : '',
           pointsToRedeem,
           paymentMethod,
           notes,
@@ -979,6 +1031,83 @@ export const CheckoutPage: React.FC = () => {
             </div>
             {voucherMsg && <p className="text-xs text-[#00552B] dark:text-[#C6A667] font-medium">{voucherMsg}</p>}
 
+            {appliedVoucherType === 'product_gift' && appliedPromoMeta && (
+              <div className="rounded-xl border border-[#C6A667]/50 bg-[#C6A667]/12 dark:bg-[#C6A667]/15 p-3 flex items-center gap-3 text-xs">
+                {appliedPromoMeta.gift_image_key ? (
+                  <MediaImage
+                    imageKey={appliedPromoMeta.gift_image_key}
+                    alt={appliedPromoMeta.gift_product_name_vi || appliedPromoMeta.title_vi}
+                    className="w-11 h-11 rounded-lg object-cover shrink-0 border border-[#C6A667]/40"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-lg bg-[#00552B] text-[#C6A667] flex items-center justify-center shrink-0">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-[#00552B] dark:text-[#C6A667]">
+                    {lang === 'vi' ? appliedPromoMeta.gift_product_name_vi || appliedPromoMeta.title_vi : appliedPromoMeta.gift_product_name_en || appliedPromoMeta.title_en}
+                    {appliedPromoMeta.gift_product_variant ? ` (${appliedPromoMeta.gift_product_variant})` : ''}
+                  </p>
+                  <p className="text-[11px] text-[#202020]/70 dark:text-[#F1EFEA]/70">
+                    {lang === 'vi' ? appliedPromoMeta.terms_vi : appliedPromoMeta.terms_en}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Mini-Game Rewards Quick Picker */}
+            {myGameClaims.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[11px] font-semibold text-[#00552B] dark:text-[#C6A667] flex items-center gap-1.5">
+                  <Gamepad2 className="w-3.5 h-3.5" />
+                  <span>{t('Quà tặng & Mã thưởng Mini-Game của bạn:', 'Your Mini-Game Gifts & Vouchers:')}</span>
+                </p>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
+                  {myGameClaims.map((cl) => {
+                    const isApplied =
+                      voucherCode.trim().toUpperCase() === String(cl.claim_code || '').toUpperCase() &&
+                      (voucherDiscount > 0 || appliedVoucherType === 'free_shipping' || appliedVoucherType === 'product_gift');
+                    return (
+                      <div
+                        key={cl.id}
+                        className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[11px] ${
+                          isApplied
+                            ? 'border-[#00552B] bg-[#00552B]/10 dark:border-[#C6A667] dark:bg-[#C6A667]/10'
+                            : 'border-[#C6A667]/35 bg-[#F8F5EF]/80 dark:bg-[#0E1512]'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-[#00552B] dark:text-[#C6A667]">{cl.claim_code}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-[#00552B] text-white text-[10px] font-semibold">
+                              {cl.reward_type === 'product_gift' ? t('Quà tặng', 'Gift') : t('Game', 'Game')}
+                            </span>
+                          </div>
+                          <p className="text-[#202020]/75 dark:text-[#F1EFEA]/75 truncate mt-0.5">
+                            {lang === 'vi'
+                              ? cl.gift_product_name_vi || cl.reward_label_vi
+                              : cl.gift_product_name_en || cl.reward_label_en}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => applyVoucher(cl.claim_code)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-semibold shrink-0 cursor-pointer ${
+                            isApplied
+                              ? 'bg-[#00552B] text-white'
+                              : 'border border-[#00552B] text-[#00552B] dark:border-[#C6A667] dark:text-[#C6A667] hover:bg-[#00552B] hover:text-white'
+                          }`}
+                        >
+                          {isApplied ? t('Đang dùng', 'Applied') : t('Áp dụng', 'Apply')}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Available & Suggested Vouchers Picker */}
             {availablePromos.length > 0 && (
               <div className="space-y-1.5 pt-1">
@@ -1085,6 +1214,17 @@ export const CheckoutPage: React.FC = () => {
               <div className="flex justify-between text-[#00552B] dark:text-[#C6A667]">
                 <span>{t('Giảm giá voucher', 'Voucher Discount')}</span>
                 <span className="tabular-nums">-{formatPrice(voucherDiscount)}</span>
+              </div>
+            )}
+            {appliedVoucherType === 'product_gift' && appliedPromoMeta && (
+              <div className="flex justify-between text-[#00552B] dark:text-[#C6A667] gap-2">
+                <span>{t('Quà tặng kèm đơn', 'Attached Free Gift')}</span>
+                <span className="font-semibold text-right truncate max-w-[60%]">
+                  {lang === 'vi'
+                    ? appliedPromoMeta.gift_product_name_vi || appliedPromoMeta.title_vi
+                    : appliedPromoMeta.gift_product_name_en || appliedPromoMeta.title_en}{' '}
+                  ({t('Miễn phí', 'Free')})
+                </span>
               </div>
             )}
             {pointsDiscount > 0 && (

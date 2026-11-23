@@ -294,7 +294,7 @@ export const FloatingAssistDock: React.FC = () => {
                     formatPrice={formatPrice}
                     onNavigate={() => setChatOpen(false)}
                     onAdd={(p) => {
-                      const isKg = p.category === 'roasted_beans' || (p.pricing_tiers?.length || 0) > 0;
+                      const isKg = (p.pricing_tiers?.length || 0) > 0;
                       const firstVar = p.variants?.[0];
                       addToCart({
                         productId: p.id,

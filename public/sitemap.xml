@@ -1746,4 +1746,22 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://roarcoffee.vn/en/journal/arabica-tay-bac-son-la-dien-bien-va-mang-den" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://roarcoffee.vn/journal/arabica-tay-bac-son-la-dien-bien-va-mang-den" />
   </url>
+  <url>
+    <loc>https://roarcoffee.vn/play</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="vi" href="https://roarcoffee.vn/play" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://roarcoffee.vn/en/play" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://roarcoffee.vn/play" />
+  </url>
+  <url>
+    <loc>https://roarcoffee.vn/en/play</loc>
+    <lastmod>2026-11-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="vi" href="https://roarcoffee.vn/play" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://roarcoffee.vn/en/play" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://roarcoffee.vn/play" />
+  </url>
 </urlset>

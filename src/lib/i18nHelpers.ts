@@ -24,6 +24,15 @@ const VARIANT_VI_MAP: Record<string, string> = {
   '60kg Jute / PP Bag': 'Bao đay / PP 60kg',
   '69kg Export Bag': 'Bao xuất khẩu 69kg',
   '1,000kg Big Bag (Container / Contract)': 'Bao lớn 1.000kg (Container / Hợp đồng)',
+  'Gói 500g · Rang xay': 'Gói 500g · Rang xay',
+  'Túi 200g · Hạt rang': 'Túi 200g · Hạt rang nguyên chất',
+  'Gói 200g · Hạt rang': 'Gói 200g · Hạt rang nguyên chất',
+  'Hộp 10 gói × 17g': 'Hộp 10 gói × 17g',
+  'Túi 45 gói × 17g': 'Túi 45 gói × 17g',
+  'Hộp 10 gói × 18g': 'Hộp 10 gói × 18g',
+  'Hũ 45g': 'Hũ 45g',
+  'Hũ 90g': 'Hũ 90g',
+  'Hũ Cối Xay 70g': 'Hũ Cối Xay 70g',
   Standard: 'Tiêu chuẩn',
 };
 
@@ -116,6 +125,14 @@ const COFFEE_TYPE_VI: Record<string, string> = {
   'Premium Instant Coffee': 'Cà phê Hòa tan Cao cấp',
   'Culi / Peaberry': 'Culi (Hạt tròn)',
   'Custom Blend': 'Phối trộn Tùy chỉnh',
+  '500g Ground Roast': 'Rang Xay Đóng Gói 500g',
+  '200g Whole Bean': 'Hạt Rang Đóng Túi 200g',
+  '3in1 Instant Coffee': 'Cà Phê Hòa Tan 3in1',
+  'Salted Coffee': 'Cà Phê Muối Hòa Tan',
+  'Ground Black Pepper': 'Tiêu Đen Xay Nguyên Chất',
+  'White / Hulled Pepper': 'Tiêu Đen Sọ Tuyển Chọn',
+  'Black Peppercorns Grinder': 'Tiêu Đen Hạt Cối Xay',
+  'White Peppercorns Grinder': 'Tiêu Sọ Hạt Cối Xay',
 };
 
 export function localizeCoffeeType(type: string, lang: Lang): string {

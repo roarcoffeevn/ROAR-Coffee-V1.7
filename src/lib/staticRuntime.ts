@@ -7,6 +7,13 @@ import {
   resolveEffectiveMembershipTier,
   ROAR_MEMBERSHIP_TIERS,
 } from './membershipTiers';
+import {
+  DEFAULT_CHECKIN_SCHEDULE,
+  DEFAULT_GAME_CONFIGS,
+  DEFAULT_GAME_REWARDS,
+  type CheckinScheduleDay,
+  type GameKey,
+} from './gamesCatalog';
 
 const STATIC_STATE_KEY = 'roar_static_runtime_v1';
 
@@ -40,6 +47,12 @@ interface StaticRuntimeState {
   walletTransactions: any[];
   checkins: Record<number, { streak: number; lastCheckinDate: string; history: any[] }>;
   productReviews?: Record<string, any[]>;
+  gameConfigs?: any[];
+  gameRewards?: any[];
+  gamePlays?: any[];
+  gameClaims?: any[];
+  generatedPromos?: any[];
+  checkinSchedule?: CheckinScheduleDay[];
 }
 
 function getDefaultUsers(): StaticUserRecord[] {
@@ -268,6 +281,12 @@ function readState(): StaticRuntimeState {
         walletTransactions: Array.isArray(parsed.walletTransactions) ? parsed.walletTransactions : [],
         checkins: parsed.checkins && typeof parsed.checkins === 'object' ? parsed.checkins : {},
         productReviews: parsed.productReviews && typeof parsed.productReviews === 'object' ? parsed.productReviews : {},
+        gameConfigs: Array.isArray(parsed.gameConfigs) ? parsed.gameConfigs : undefined,
+        gameRewards: Array.isArray(parsed.gameRewards) ? parsed.gameRewards : undefined,
+        gamePlays: Array.isArray(parsed.gamePlays) ? parsed.gamePlays : [],
+        gameClaims: Array.isArray(parsed.gameClaims) ? parsed.gameClaims : [],
+        generatedPromos: Array.isArray(parsed.generatedPromos) ? parsed.generatedPromos : [],
+        checkinSchedule: Array.isArray(parsed.checkinSchedule) ? parsed.checkinSchedule : undefined,
       };
     }
   } catch {
@@ -284,6 +303,9 @@ function readState(): StaticRuntimeState {
     walletTransactions: [],
     checkins: {},
     productReviews: {},
+    gamePlays: [],
+    gameClaims: [],
+    generatedPromos: [],
   };
 }
 
@@ -663,7 +685,11 @@ export async function handleStaticApiFallback(
     let reply = '';
 
     if (q.includes('kg') || q.includes('sỉ') || q.includes('hạt rang') || q.includes('s18') || q.includes('báo giá') || q.includes('wholesale')) {
-      const beans = allProds.filter((p: any) => p.category === 'roasted_beans');
+      const beans = allProds.filter((p: any) => {
+        if (p.category !== 'roasted_beans') return false;
+        const tiers = Array.isArray(p.pricing_tiers) ? p.pricing_tiers : JSON.parse(p.pricing_tiers_json || '[]');
+        return Array.isArray(tiers) && tiers.length > 0;
+      });
       matched = beans.filter((p: any) => {
         if (q.includes('arabica')) return p.name_vi.toLowerCase().includes('arabica');
         if (q.includes('culi')) return p.name_vi.toLowerCase().includes('culi');
@@ -776,7 +802,8 @@ export async function handleStaticApiFallback(
             ? { ...d, voucher_code: 'ROAR-GIFT-••••-••••', is_code_masked: true }
             : d
         ),
-      activeVouchers: (snap?.tables?.promotions || []).filter((p: any) => p.active),
+      activeVouchers: [...(state.generatedPromos || []), ...(snap?.tables?.promotions || [])].filter((p: any) => p.active),
+      gameClaims: (state.gameClaims || []).filter((c: any) => c.user_id === u.id),
       tiers: snapTiers,
       loyaltySettings: (snap?.tables?.loyalty_settings || [])[0] || null,
       notifications: [],
@@ -787,8 +814,43 @@ export async function handleStaticApiFallback(
   if (pathname === '/api/promotions/validate' && method === 'POST') {
     const code = String(body.code || '').trim().toUpperCase();
     const sub = Number(body.subtotal || 0);
-    const promos = snap?.tables?.promotions || [];
-    const promo = promos.find((p: any) => String(p.code || '').toUpperCase() === code && p.active);
+    const u = resolveTokenUser(headers, state);
+    const gameClaim = (state.gameClaims || []).find(
+      (c: any) => String(c.claim_code || '').toUpperCase() === code && c.reward_type === 'product_gift'
+    );
+    if (gameClaim) {
+      if (gameClaim.status === 'redeemed' || gameClaim.status === 'fulfilled') {
+        return jsonResponse({ error: 'Mã quà tặng Mini-Game này đã được sử dụng trước đó.' }, 400);
+      }
+      if (gameClaim.status !== 'active' || new Date(gameClaim.expires_at).getTime() < Date.now()) {
+        return jsonResponse({ error: 'Mã quà tặng Mini-Game đã hết hạn hoặc bị hủy.' }, 400);
+      }
+      if (!u || gameClaim.user_id !== u.id) {
+        return jsonResponse({ error: 'Vui lòng đăng nhập đúng tài khoản đã trúng quà để áp dụng.' }, 403);
+      }
+      return jsonResponse({
+        valid: true,
+        isGameGift: true,
+        promo: {
+          id: gameClaim.id,
+          code: gameClaim.claim_code,
+          discount_type: 'product_gift',
+          discount_value: 0,
+          title_vi: `Quà tặng Mini-Game: ${gameClaim.gift_product_name_vi || gameClaim.reward_label_vi}`,
+          title_en: `Mini-Game Gift: ${gameClaim.gift_product_name_en || gameClaim.reward_label_en}`,
+          gift_product_name_vi: gameClaim.gift_product_name_vi,
+          gift_product_name_en: gameClaim.gift_product_name_en,
+          gift_product_variant: gameClaim.gift_product_variant,
+          gift_image_key: gameClaim.gift_image_key,
+          terms_vi: `Gửi kèm miễn phí trong đơn hàng. HSD: ${String(gameClaim.expires_at).slice(0, 10)}.`,
+          terms_en: `Included free with your order. Expires: ${String(gameClaim.expires_at).slice(0, 10)}.`,
+        },
+        discountAmount: 0,
+      });
+    }
+
+    const promos = [...(state.generatedPromos || []), ...(snap?.tables?.promotions || [])];
+    const promo = promos.find((p: any) => String(p.code || '').toUpperCase() === code && p.active && (p.used_count || 0) < (p.usage_limit || 1000));
     if (!promo) return jsonResponse({ error: 'Mã khuyến mãi không hợp lệ hoặc đã hết hạn.' }, 404);
     if (sub < Number(promo.min_order_value || 0)) {
       return jsonResponse({ error: `Đơn hàng tối thiểu ${Number(promo.min_order_value).toLocaleString('vi-VN')} ₫.` }, 400);
@@ -864,25 +926,35 @@ export async function handleStaticApiFallback(
     let shippingFee = shippingCalc.feeVnd;
     let discountAmount = 0;
     let appliedVoucher = '';
+    let redeemedGameClaim: any = null;
+    let redeemedPromoObj: any = null;
+    const u = resolveTokenUser(headers, state);
     if (body.voucherCode) {
       const code = String(body.voucherCode).trim().toUpperCase();
-      const promo = (snap?.tables?.promotions || []).find(
-        (p: any) => String(p.code || '').toUpperCase() === code && p.active
+      const gClaim = (state.gameClaims || []).find(
+        (c: any) => String(c.claim_code || '').toUpperCase() === code && c.reward_type === 'product_gift' && c.status === 'active'
       );
-      if (promo && subtotal >= Number(promo.min_order_value || 0)) {
-        appliedVoucher = promo.code;
-        if (promo.discount_type === 'percent') {
-          discountAmount = Math.round((subtotal * promo.discount_value) / 100);
-          if (promo.max_discount > 0) discountAmount = Math.min(discountAmount, promo.max_discount);
-        } else if (promo.discount_type === 'fixed') {
-          discountAmount = Math.min(subtotal, promo.discount_value);
-        } else if (promo.discount_type === 'free_shipping') {
-          shippingFee = 0;
+      if (gClaim && (!u || gClaim.user_id === u.id)) {
+        appliedVoucher = gClaim.claim_code;
+        redeemedGameClaim = gClaim;
+      } else {
+        const promo = [...(state.generatedPromos || []), ...(snap?.tables?.promotions || [])].find(
+          (p: any) => String(p.code || '').toUpperCase() === code && p.active && (p.used_count || 0) < (p.usage_limit || 1000)
+        );
+        if (promo && subtotal >= Number(promo.min_order_value || 0)) {
+          appliedVoucher = promo.code;
+          redeemedPromoObj = promo;
+          if (promo.discount_type === 'percent') {
+            discountAmount = Math.round((subtotal * promo.discount_value) / 100);
+            if (promo.max_discount > 0) discountAmount = Math.min(discountAmount, promo.max_discount);
+          } else if (promo.discount_type === 'fixed') {
+            discountAmount = Math.min(subtotal, promo.discount_value);
+          } else if (promo.discount_type === 'free_shipping') {
+            shippingFee = 0;
+          }
         }
       }
     }
-
-    const u = resolveTokenUser(headers, state);
     let pointsRedeemed = 0;
     let pointsDiscount = 0;
     const requestedPoints = Math.max(0, Math.floor(Number(body.pointsToRedeem || 0)));
@@ -939,8 +1011,24 @@ export async function handleStaticApiFallback(
       customerPhone: cleanCustomerPhone,
     });
 
+    const orderId = Date.now();
+    if (redeemedGameClaim) {
+      redeemedGameClaim.status = 'redeemed';
+      redeemedGameClaim.redeemed_order_id = orderId;
+      redeemedGameClaim.redeemed_at = new Date().toISOString();
+    } else if (redeemedPromoObj) {
+      redeemedPromoObj.used_count = (redeemedPromoObj.used_count || 0) + 1;
+      const matchedClaim = (state.gameClaims || []).find(
+        (c: any) => String(c.promo_code || '').toUpperCase() === String(appliedVoucher).toUpperCase() && c.status === 'active'
+      );
+      if (matchedClaim) {
+        matchedClaim.status = 'redeemed';
+        matchedClaim.redeemed_order_id = orderId;
+        matchedClaim.redeemed_at = new Date().toISOString();
+      }
+    }
     const newOrder = {
-      id: Date.now(),
+      id: orderId,
       order_number: orderNumber,
       user_id: resolvedCustomer.user.id,
       customer_name: cleanCustomerName,
@@ -958,7 +1046,14 @@ export async function handleStaticApiFallback(
       payment_method: paymentMethod,
       payment_status: initialPaymentStatus,
       order_status: 'Pending',
-      notes: body.notes || '',
+      notes: [
+        String(body.notes || '').trim(),
+        redeemedGameClaim
+          ? `[Quà tặng Mini-Game kèm đơn: ${redeemedGameClaim.gift_product_name_vi || redeemedGameClaim.reward_label_vi} · Mã ${redeemedGameClaim.claim_code}]`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
       created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
       items: resolvedItems,
     };
@@ -1964,20 +2059,27 @@ export async function handleStaticApiFallback(
     });
   }
 
-  // Daily Check-in 7-day Streak Game
-  const CHECKIN_SCHEDULE = [
-    { day: 1, points: 10, label: 'Ngày 1', bonus: false },
-    { day: 2, points: 15, label: 'Ngày 2', bonus: false },
-    { day: 3, points: 40, label: 'Ngày 3 • Bonus 3 ngày', bonus: true },
-    { day: 4, points: 20, label: 'Ngày 4', bonus: false },
-    { day: 5, points: 25, label: 'Ngày 5', bonus: false },
-    { day: 6, points: 30, label: 'Ngày 6', bonus: false },
-    { day: 7, points: 100, label: 'Ngày 7 • Quà Tuần ROAR', bonus: true },
-  ];
+  // Daily Check-in 7-day Streak Game (Dynamic Admin Schedule Support)
+  const resolveStaticCheckinSchedule = (): CheckinScheduleDay[] => {
+    if (Array.isArray(state.checkinSchedule) && state.checkinSchedule.length === 7) {
+      return state.checkinSchedule;
+    }
+    const rawSetting = (snap?.tables?.site_settings || []).find((s) => s.key === 'checkin_schedule_json')?.value;
+    if (rawSetting) {
+      try {
+        const parsed = JSON.parse(rawSetting);
+        if (Array.isArray(parsed) && parsed.length === 7) return parsed;
+      } catch {
+        // ignore
+      }
+    }
+    return DEFAULT_CHECKIN_SCHEDULE;
+  };
 
   if (pathname === '/api/checkin/status' && method === 'GET') {
     const me = resolveTokenUser(headers, state);
     if (!me) return jsonResponse({ error: 'Vui lòng đăng nhập.' }, 401);
+    const schedule = resolveStaticCheckinSchedule();
     const today = new Date().toISOString().slice(0, 10);
     const rec = state.checkins[me.id] || { streak: 0, lastCheckinDate: '', history: [] };
     const checkedInToday = rec.lastCheckinDate === today;
@@ -1985,7 +2087,7 @@ export async function handleStaticApiFallback(
       checkedInToday,
       currentStreak: rec.streak,
       nextDay: checkedInToday ? rec.streak : (rec.streak % 7) + 1,
-      schedule: CHECKIN_SCHEDULE,
+      schedule,
       history: rec.history.slice(0, 14),
       points: me.points ?? 0,
     });
@@ -1994,20 +2096,21 @@ export async function handleStaticApiFallback(
   if (pathname === '/api/checkin' && method === 'POST') {
     const me = resolveTokenUser(headers, state);
     if (!me) return jsonResponse({ error: 'Vui lòng đăng nhập.' }, 401);
+    const schedule = resolveStaticCheckinSchedule();
     const today = new Date().toISOString().slice(0, 10);
     const rec = state.checkins[me.id] || { streak: 0, lastCheckinDate: '', history: [] };
     if (rec.lastCheckinDate === today) {
       return jsonResponse({ error: 'Bạn đã điểm danh hôm nay rồi!' }, 400);
     }
     const nextDay = (rec.streak % 7) + 1;
-    const reward = CHECKIN_SCHEDULE[nextDay - 1] || CHECKIN_SCHEDULE[0];
+    const reward = schedule[nextDay - 1] || schedule[0];
     rec.streak = nextDay;
     rec.lastCheckinDate = today;
     rec.history.unshift({
       date: today,
       day: nextDay,
       points: reward.points,
-      label: reward.label,
+      bonus_reward: reward.bonusVi,
     });
     state.checkins[me.id] = rec;
     me.points = (me.points ?? 0) + reward.points;
@@ -2015,13 +2118,407 @@ export async function handleStaticApiFallback(
     writeState(state);
     return jsonResponse({
       ok: true,
-      day: nextDay,
+      streakDay: nextDay,
+      cycleDay: nextDay,
       pointsAwarded: reward.points,
+      bonusVi: reward.bonusVi,
+      bonusEn: reward.bonusEn,
       currentStreak: rec.streak,
       totalPoints: me.points,
       checkedInToday: true,
-      schedule: CHECKIN_SCHEDULE,
+      schedule,
     });
+  }
+
+  // Interactive Mini-Games & Admin Gift Replacement Engine (Static Parity)
+  const ensureStaticGamesSeeded = () => {
+    if (!Array.isArray(state.gameConfigs) || state.gameConfigs.length === 0) {
+      state.gameConfigs = Array.isArray(snap?.tables?.game_configs) && snap.tables.game_configs.length > 0
+        ? JSON.parse(JSON.stringify(snap.tables.game_configs))
+        : JSON.parse(JSON.stringify(DEFAULT_GAME_CONFIGS));
+    } else {
+      for (const defCfg of DEFAULT_GAME_CONFIGS) {
+        if (!state.gameConfigs.some((c) => c.game_key === defCfg.game_key)) {
+          state.gameConfigs.push(JSON.parse(JSON.stringify(defCfg)));
+        }
+      }
+    }
+    if (!Array.isArray(state.gameRewards) || state.gameRewards.length === 0) {
+      state.gameRewards = Array.isArray(snap?.tables?.game_rewards) && snap.tables.game_rewards.length > 0
+        ? JSON.parse(JSON.stringify(snap.tables.game_rewards))
+        : DEFAULT_GAME_REWARDS.map((r, i) => ({ ...r, id: i + 1 }));
+    } else {
+      let maxId = state.gameRewards.reduce((m, r) => Math.max(m, Number(r.id || 0)), 0);
+      for (const defKey of ['shake', 'fortune'] as const) {
+        if (!state.gameRewards.some((r) => r.game_key === defKey)) {
+          for (const rw of DEFAULT_GAME_REWARDS.filter((x) => x.game_key === defKey)) {
+            maxId += 1;
+            state.gameRewards.push({ ...rw, id: maxId });
+          }
+        }
+      }
+    }
+    if (!Array.isArray(state.gamePlays)) state.gamePlays = [];
+    if (!Array.isArray(state.gameClaims)) state.gameClaims = [];
+    if (!Array.isArray(state.generatedPromos)) state.generatedPromos = [];
+  };
+
+  if (pathname === '/api/games' && method === 'GET') {
+    ensureStaticGamesSeeded();
+    const me = resolveTokenUser(headers, state);
+    const today = new Date().toISOString().slice(0, 10);
+    const playsTodayByGame: Record<string, number> = {};
+    const remainingFreeToday: Record<string, number> = {};
+    if (me) {
+      for (const p of state.gamePlays || []) {
+        if (p.user_id === me.id && p.play_date === today) {
+          playsTodayByGame[p.game_key] = (playsTodayByGame[p.game_key] || 0) + 1;
+        }
+      }
+    }
+    for (const cfg of state.gameConfigs || []) {
+      remainingFreeToday[cfg.game_key] = Math.max(0, Number(cfg.daily_free_plays || 0) - (playsTodayByGame[cfg.game_key] || 0));
+    }
+    const myClaims = me ? (state.gameClaims || []).filter((c) => c.user_id === me.id) : [];
+    const recentWinners = (state.gameClaims || []).slice(0, 10).map((c: any) => ({
+      id: c.id,
+      game_key: c.game_key,
+      display_name: c.user_name ? `${String(c.user_name).split(' ')[0]} ***` : 'ROAR Member',
+      reward_type: c.reward_type,
+      reward_label_vi: c.reward_label_vi,
+      reward_label_en: c.reward_label_en,
+      gift_product_name_vi: c.gift_product_name_vi,
+      gift_product_name_en: c.gift_product_name_en,
+      created_at: c.created_at,
+    }));
+    return jsonResponse({
+      configs: state.gameConfigs,
+      rewards: state.gameRewards,
+      remainingFreeToday,
+      playsTodayByGame,
+      myClaims,
+      userPoints: me ? { available: me.points ?? 120, pending: 0, redeemed: 0 } : null,
+      recentWinners,
+    });
+  }
+
+  if (pathname === '/api/games/play' && method === 'POST') {
+    ensureStaticGamesSeeded();
+    const me = resolveTokenUser(headers, state);
+    if (!me) return jsonResponse({ error: 'Vui lòng đăng nhập để tham gia & nhận thưởng.' }, 401);
+    const gameKey = String(body.gameKey || '').trim() as GameKey;
+    const cfg = (state.gameConfigs || []).find((c) => c.game_key === gameKey);
+    if (!cfg || !cfg.active) return jsonResponse({ error: 'Mini-game này hiện đang tạm khóa.' }, 400);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const playsToday = (state.gamePlays || []).filter((p) => p.user_id === me.id && p.game_key === gameKey && p.play_date === today).length;
+    const freeRemaining = Math.max(0, Number(cfg.daily_free_plays || 0) - playsToday);
+    let usedPoints = 0;
+
+    if (freeRemaining <= 0) {
+      if (!body.useExtraPoints) {
+        return jsonResponse({ error: 'Bạn đã hết lượt miễn phí hôm nay. Chọn Dùng điểm để chơi thêm!', outOfFreePlays: true }, 400);
+      }
+      const cost = Math.max(1, Number(cfg.extra_play_cost_points || 20));
+      if ((me.points ?? 0) < cost) {
+        return jsonResponse({ error: `Bạn cần ${cost} điểm để chơi thêm (hiện có ${me.points ?? 0} điểm).` }, 400);
+      }
+      me.points = (me.points ?? 0) - cost;
+      usedPoints = cost;
+    }
+
+    const score = Math.max(0, Math.floor(Number(body.score || 0)));
+    if (gameKey === 'harvest' && score < Number(cfg.min_score_to_win || 0)) {
+      state.gamePlays!.unshift({ id: Date.now(), user_id: me.id, game_key: gameKey, play_date: today, used_points: usedPoints, score });
+      writeState(state);
+      return jsonResponse({
+        ok: true,
+        won: false,
+        score,
+        minScoreRequired: Number(cfg.min_score_to_win || 0),
+        remainingFreeToday: Math.max(0, Number(cfg.daily_free_plays || 0) - (playsToday + 1)),
+        points: { available: me.points ?? 0, pending: 0, redeemed: 0 },
+      });
+    }
+
+    const eligible = (state.gameRewards || []).filter(
+      (r) => r.game_key === gameKey && r.active && (r.stock_total < 0 || r.stock_remaining > 0)
+    );
+    if (eligible.length === 0) return jsonResponse({ error: 'Kho quà của trò chơi đang cập nhật thêm.' }, 400);
+
+    const totalWeight = eligible.reduce((sum, r) => sum + Math.max(1, Number(r.weight || 1)), 0);
+    let roll = Math.random() * totalWeight;
+    let wonReward = eligible[eligible.length - 1];
+    for (const r of eligible) {
+      roll -= Math.max(1, Number(r.weight || 1));
+      if (roll <= 0) {
+        wonReward = r;
+        break;
+      }
+    }
+    if (wonReward.stock_total >= 0) {
+      wonReward.stock_remaining = Math.max(0, Number(wonReward.stock_remaining || 0) - 1);
+    }
+
+    const rnd = Math.random().toString(36).slice(2, 8).toUpperCase();
+    let promoCode = '';
+    let claimCode = `PTS-${rnd}`;
+    let status: 'active' | 'fulfilled' = 'active';
+    const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+    const endDate = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+    if (wonReward.reward_type === 'points') {
+      me.points = (me.points ?? 0) + Number(wonReward.reward_value || 0);
+      status = 'fulfilled';
+    } else if (wonReward.reward_type !== 'product_gift') {
+      promoCode = `ROAR-GM-${rnd}`;
+      claimCode = promoCode;
+      const discountType =
+        wonReward.reward_type === 'voucher_percent'
+          ? 'percent'
+          : wonReward.reward_type === 'voucher_fixed'
+            ? 'fixed'
+            : 'free_shipping';
+      state.generatedPromos!.unshift({
+        id: Date.now(),
+        code: promoCode,
+        title_vi: `[Mini-Game] ${wonReward.label_vi}`,
+        title_en: `[Mini-Game] ${wonReward.label_en}`,
+        discount_type: discountType,
+        discount_value: wonReward.reward_value,
+        max_discount: wonReward.max_discount || 0,
+        min_order_value: wonReward.min_order_value || 0,
+        start_date: today,
+        end_date: endDate,
+        usage_limit: 1,
+        used_count: 0,
+        active: 1,
+      });
+    } else {
+      claimCode = `GIFT-ROAR-${rnd}`;
+    }
+
+    const claim = {
+      id: Date.now() + 1,
+      user_id: me.id,
+      user_name: me.fullName,
+      user_email: me.email,
+      member_code: me.memberCode,
+      game_key: gameKey,
+      reward_id: wonReward.id,
+      claim_code: claimCode,
+      reward_type: wonReward.reward_type,
+      reward_label_vi: wonReward.label_vi,
+      reward_label_en: wonReward.label_en,
+      reward_value: wonReward.reward_value,
+      promo_code: promoCode,
+      gift_product_id: wonReward.gift_product_id,
+      gift_product_slug: wonReward.gift_product_slug,
+      gift_product_name_vi: wonReward.gift_product_name_vi,
+      gift_product_name_en: wonReward.gift_product_name_en,
+      gift_product_variant: wonReward.gift_product_variant,
+      gift_image_key: wonReward.gift_image_key,
+      status,
+      expires_at: expiresAt,
+      created_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    };
+    state.gameClaims!.unshift(claim);
+    state.gamePlays!.unshift({ id: Date.now(), user_id: me.id, game_key: gameKey, play_date: today, used_points: usedPoints, score });
+    writeState(state);
+
+    return jsonResponse({
+      ok: true,
+      won: true,
+      score,
+      usedPoints,
+      reward: wonReward,
+      claim,
+      promoCode,
+      remainingFreeToday: Math.max(0, Number(cfg.daily_free_plays || 0) - (playsToday + 1)),
+      points: { available: me.points ?? 0, pending: 0, redeemed: 0 },
+    });
+  }
+
+  if (pathname.startsWith('/api/admin/games')) {
+    ensureStaticGamesSeeded();
+    const admin = resolveTokenUser(headers, state);
+    if (!admin || admin.role !== 'admin') return jsonResponse({ error: 'Forbidden' }, 403);
+
+    if (pathname === '/api/admin/games/analytics' && method === 'GET') {
+      const daysParam = searchParams.get('days') || '14';
+      const days = daysParam === 'all' || daysParam === '0' ? 0 : Math.min(90, Math.max(7, Number(daysParam) || 14));
+      const sinceDate =
+        days > 0 ? new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10) : '1970-01-01';
+      const plays = (state.gamePlays || []).filter((p: any) => String(p.play_date || '') >= sinceDate);
+      const claims = (state.gameClaims || []).filter((c: any) => String(c.created_at || '').slice(0, 10) >= sinceDate);
+      const isConverted = (c: any) =>
+        c.status === 'redeemed' || (c.status === 'fulfilled' && c.reward_type !== 'points') || Boolean(c.redeemed_order_id);
+      const getOrderTotal = (c: any) => {
+        const ord = (state.orders || []).find(
+          (o: any) =>
+            o.id === c.redeemed_order_id ||
+            (c.claim_code && String(o.voucher_code || '').toUpperCase() === String(c.claim_code).toUpperCase())
+        );
+        return ord && ord.order_status !== 'Cancelled' ? Number(ord.total || 0) : 0;
+      };
+      const redeemable = claims.filter((c: any) => c.reward_type !== 'points');
+      const converted = redeemable.filter(isConverted);
+      const totalPlays = plays.length;
+      const totalWins = claims.length;
+      const totalPointsSpent = plays.reduce((acc: number, p: any) => acc + Number(p.used_points || 0), 0);
+      const attributedRevenueVnd = converted.reduce((acc: number, c: any) => acc + getOrderTotal(c), 0);
+
+      const byGame = (state.gameConfigs || []).map((cfg: any) => {
+        const gp = plays.filter((p: any) => p.game_key === cfg.game_key);
+        const gc = claims.filter((c: any) => c.game_key === cfg.game_key);
+        const gRed = gc.filter((c: any) => c.reward_type !== 'points');
+        const gConv = gRed.filter(isConverted);
+        return {
+          game_key: cfg.game_key,
+          title_vi: cfg.title_vi,
+          title_en: cfg.title_en,
+          plays: gp.length,
+          uniquePlayers: new Set(gp.map((p: any) => p.user_id)).size,
+          wins: gc.length,
+          winRatePct: gp.length > 0 ? Math.round((gc.length / gp.length) * 1000) / 10 : 0,
+          pointsSpent: gp.reduce((acc: number, p: any) => acc + Number(p.used_points || 0), 0),
+          redeemableClaims: gRed.length,
+          redeemedOrders: gConv.length,
+          conversionRatePct: gRed.length > 0 ? Math.round((gConv.length / gRed.length) * 1000) / 10 : 0,
+          attributedRevenueVnd: gConv.reduce((acc: number, c: any) => acc + getOrderTotal(c), 0),
+        };
+      });
+
+      const winDays = days > 0 ? days : 30;
+      const dailyMap = new Map<string, { plays: number; wins: number; conversions: number }>();
+      for (let i = winDays - 1; i >= 0; i--) {
+        const dStr = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        dailyMap.set(dStr, { plays: 0, wins: 0, conversions: 0 });
+      }
+      for (const p of plays) {
+        const cur = dailyMap.get(String(p.play_date || '').slice(0, 10));
+        if (cur) cur.plays += 1;
+      }
+      for (const c of claims) {
+        const cur = dailyMap.get(String(c.created_at || '').slice(0, 10));
+        if (cur) cur.wins += 1;
+        if (isConverted(c)) {
+          const cCur = dailyMap.get(String(c.redeemed_at || c.created_at || '').slice(0, 10));
+          if (cCur) cCur.conversions += 1;
+        }
+      }
+      const dailySeries = Array.from(dailyMap.entries()).map(([date, v]) => ({
+        date,
+        label: date.slice(5),
+        plays: v.plays,
+        wins: v.wins,
+        conversions: v.conversions,
+      }));
+      const byRewardType = [
+        { type: 'points', label: 'Điểm ROAR' },
+        { type: 'voucher_percent', label: 'Voucher %' },
+        { type: 'voucher_fixed', label: 'Voucher Tiền' },
+        { type: 'free_shipping', label: 'Freeship' },
+        { type: 'product_gift', label: 'Quà Sản Phẩm' },
+      ].map((rt) => {
+        const rows = claims.filter((c: any) => c.reward_type === rt.type);
+        const red = rows.filter((c: any) => (rt.type === 'points' ? c.status === 'fulfilled' : isConverted(c))).length;
+        return {
+          reward_type: rt.type,
+          label: rt.label,
+          issued: rows.length,
+          redeemed: red,
+          conversionPct: rows.length > 0 ? Math.round((red / rows.length) * 1000) / 10 : 0,
+        };
+      });
+
+      return jsonResponse({
+        days,
+        summary: {
+          totalPlays,
+          uniquePlayers: new Set(plays.map((p: any) => p.user_id)).size,
+          totalWins,
+          winRatePct: totalPlays > 0 ? Math.round((totalWins / totalPlays) * 1000) / 10 : 0,
+          totalPointsSpent,
+          totalRedeemableClaims: redeemable.length,
+          totalRedeemedOrders: converted.length,
+          conversionRatePct: redeemable.length > 0 ? Math.round((converted.length / redeemable.length) * 1000) / 10 : 0,
+          attributedRevenueVnd,
+          totalCheckins: Object.values(state.checkins || {}).reduce(
+            (acc: number, rec: any) =>
+              acc +
+              (Array.isArray(rec?.history)
+                ? rec.history.filter((h: any) => String(h?.date || h?.checkin_date || '') >= sinceDate).length
+                : 0),
+            0
+          ),
+        },
+        byGame,
+        dailySeries,
+        byRewardType,
+      });
+    }
+
+    if (pathname === '/api/admin/games' && method === 'GET') {
+      return jsonResponse({
+        configs: state.gameConfigs,
+        rewards: state.gameRewards,
+        claims: state.gameClaims,
+        checkinSchedule: resolveStaticCheckinSchedule(),
+      });
+    }
+    const cfgMatch = pathname.match(/^\/api\/admin\/games\/configs\/([^/]+)$/);
+    if (cfgMatch && method === 'PATCH') {
+      const gk = cfgMatch[1];
+      const idx = (state.gameConfigs || []).findIndex((c) => c.game_key === gk);
+      if (idx === -1) return jsonResponse({ error: 'Not found' }, 404);
+      state.gameConfigs![idx] = { ...state.gameConfigs![idx], ...body };
+      writeState(state);
+      return jsonResponse({ ok: true });
+    }
+    if (pathname === '/api/admin/games/rewards' && method === 'POST') {
+      const nextId = Math.max(100, ...(state.gameRewards || []).map((r) => Number(r.id || 0))) + 1;
+      state.gameRewards!.push({
+        ...body,
+        id: nextId,
+        active: body.active !== undefined ? (body.active ? 1 : 0) : 1,
+      });
+      writeState(state);
+      return jsonResponse({ ok: true, id: nextId }, 201);
+    }
+    const rwMatch = pathname.match(/^\/api\/admin\/games\/rewards\/(\d+)$/);
+    if (rwMatch) {
+      const rwId = Number(rwMatch[1]);
+      const idx = (state.gameRewards || []).findIndex((r) => r.id === rwId);
+      if (idx === -1) return jsonResponse({ error: 'Not found' }, 404);
+      if (method === 'PUT') {
+        state.gameRewards![idx] = { ...state.gameRewards![idx], ...body, id: rwId };
+        writeState(state);
+        return jsonResponse({ ok: true });
+      }
+      if (method === 'DELETE') {
+        state.gameRewards!.splice(idx, 1);
+        writeState(state);
+        return jsonResponse({ ok: true });
+      }
+    }
+    const clMatch = pathname.match(/^\/api\/admin\/games\/claims\/(\d+)$/);
+    if (clMatch && method === 'PATCH') {
+      const clId = Number(clMatch[1]);
+      const idx = (state.gameClaims || []).findIndex((c) => c.id === clId);
+      if (idx === -1) return jsonResponse({ error: 'Not found' }, 404);
+      state.gameClaims![idx] = { ...state.gameClaims![idx], ...body };
+      writeState(state);
+      return jsonResponse({ ok: true });
+    }
+    if (pathname === '/api/admin/games/checkin-schedule' && method === 'PUT') {
+      if (Array.isArray(body.schedule) && body.schedule.length === 7) {
+        state.checkinSchedule = body.schedule;
+        writeState(state);
+        return jsonResponse({ ok: true, schedule: state.checkinSchedule });
+      }
+      return jsonResponse({ error: 'Invalid schedule' }, 400);
+    }
   }
 
   // Product Customer Reviews (Static Vercel Persistence)

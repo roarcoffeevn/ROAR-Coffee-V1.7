@@ -71,7 +71,7 @@ export const BrewingHandbookPage: React.FC = () => {
 
   const handleQuickAdd = (product: Product) => {
     const firstVar = product.variants?.[0];
-    const isPerKg = product.category === 'roasted_beans' || product.category === 'green_bean';
+    const isPerKg = (product.pricing_tiers?.length || 0) > 0 || product.category === 'green_bean';
     addToCart({
       productId: product.id,
       slug: product.slug,
@@ -322,7 +322,7 @@ export const BrewingHandbookPage: React.FC = () => {
                       </p>
                       <p className="text-sm font-bold font-mono text-[#00552B] dark:text-[#C6A667] tabular-nums pt-0.5">
                         {formatPrice(prod.price_vnd, prod.price_usd)}
-                        {prod.category === 'roasted_beans' ? '/kg' : ''}
+                        {(prod.pricing_tiers?.length || 0) > 0 ? '/kg' : ''}
                       </p>
                     </div>
                   </div>
@@ -554,7 +554,7 @@ export const BrewingHandbookPage: React.FC = () => {
                           </span>
                           <span className="text-[11px] font-mono font-semibold text-[#00552B] dark:text-[#C6A667] tabular-nums">
                             {formatPrice(matchedProd.price_vnd, matchedProd.price_usd)}
-                            {matchedProd.category === 'roasted_beans' ? '/kg' : ''}
+                            {(matchedProd.pricing_tiers?.length || 0) > 0 ? '/kg' : ''}
                           </span>
                         </div>
                       </Link>

@@ -27,19 +27,27 @@ export const PromotionsPage: React.FC = () => {
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-14 space-y-10">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00552B] dark:text-[#C6A667]">
-          {t('Ưu đãi & Voucher Đang Hoạt Động', 'Active Promotions & Vouchers')}
-        </p>
-        <h1 className="text-3xl sm:text-4xl font-bold text-[#202020] dark:text-[#F1EFEA]">
-          {t('Chương Trình Ưu Đãi ROAR COFFEE', 'ROAR COFFEE Offers')}
-        </h1>
-        <p className="text-sm text-[#202020]/75 dark:text-[#F1EFEA]/75">
-          {t(
-            'Chỉ hiển thị các chiến dịch còn hiệu lực theo ngày hệ thống. Nhập mã tại trang Thanh toán.',
-            'Only currently valid campaigns are displayed. Apply voucher codes directly during checkout.'
-          )}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00552B] dark:text-[#C6A667]">
+            {t('Ưu đãi & Voucher Đang Hoạt Động', 'Active Promotions & Vouchers')}
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#202020] dark:text-[#F1EFEA]">
+            {t('Chương Trình Ưu Đãi ROAR COFFEE', 'ROAR COFFEE Offers')}
+          </h1>
+          <p className="text-sm text-[#202020]/75 dark:text-[#F1EFEA]/75">
+            {t(
+              'Chỉ hiển thị các chiến dịch còn hiệu lực theo ngày hệ thống. Nhập mã tại trang Thanh toán.',
+              'Only currently valid campaigns are displayed. Apply voucher codes directly during checkout.'
+            )}
+          </p>
+        </div>
+        <Link
+          to={localePath('/play')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00552B] hover:bg-[#003D25] text-white text-xs font-semibold shrink-0 whitespace-nowrap"
+        >
+          {t('Chơi Mini-Game Săn Quà & Voucher →', 'Play Mini-Games for Real Gifts →')}
+        </Link>
       </div>
 
       {loading ? (

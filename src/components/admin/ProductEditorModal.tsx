@@ -128,7 +128,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
   const [subCategory, setSubCategory] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
-  const [category, setCategory] = useState<'roasted' | 'roasted_beans' | 'instant' | 'green_bean'>('roasted');
+  const [category, setCategory] = useState<'roasted' | 'roasted_beans' | 'instant' | 'pepper' | 'green_bean'>('roasted');
   const [nameVi, setNameVi] = useState('');
   const [nameEn, setNameEn] = useState('');
   const [subtitleVi, setSubtitleVi] = useState('');
@@ -220,9 +220,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       setPricingTiers(
         Array.isArray(product.pricing_tiers) && product.pricing_tiers.length > 0
           ? normalizeVolumeTiers(product.pricing_tiers, effectiveVcbRate)
-          : product.category === 'roasted_beans'
-            ? buildFiveTierPrices([240000, 225000, 210000, 195000, 180000], effectiveVcbRate)
-            : []
+          : []
       );
 
       setImageKey(product.image_key || 'product_robusta_house');
@@ -701,7 +699,7 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
       }
 
       const cleanedTiers =
-        category === 'roasted_beans' || pricingTiers.length > 0
+        pricingTiers.length > 0
           ? pricingTiers.filter((t) => Number(t.priceVnd) > 0)
           : [];
       const effectivePriceVnd =
@@ -1041,9 +1039,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                   <select
                     value={category}
                     onChange={(e) => {
-                      const nextCat = e.target.value as 'roasted' | 'roasted_beans' | 'instant' | 'green_bean';
+                      const nextCat = e.target.value as 'roasted' | 'roasted_beans' | 'instant' | 'pepper' | 'green_bean';
                       setCategory(nextCat);
-                      if (nextCat === 'roasted_beans' && pricingTiers.length === 0) {
+                      if (nextCat === 'roasted_beans' && pricingTiers.length === 0 && !product) {
                         const baseSeed = priceVnd >= 100000 ? priceVnd : 240000;
                         setPricingTiers(
                           buildFiveTierPrices(
@@ -1062,8 +1060,9 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                     className="w-full border border-slate-200 rounded-lg px-3 py-2"
                   >
                     <option value="roasted">{t('Cà phê Rang xay', 'Roasted Coffee')}</option>
-                    <option value="roasted_beans">{t('Cà phê Hạt rang (5 mức giá theo kg)', 'Roasted Coffee Beans (5-tier kg)')}</option>
+                    <option value="roasted_beans">{t('Cà phê Hạt rang (Sỉ kg / Gói 200g)', 'Roasted Coffee Beans')}</option>
                     <option value="instant">{t('Cà phê Hòa tan', 'Instant Coffee')}</option>
+                    <option value="pepper">{t('Tiêu Tây Nguyên', 'Highland Pepper')}</option>
                     <option value="green_bean">{t('Cà phê Nhân xanh B2B', 'Green Coffee Beans')}</option>
                   </select>
                 </div>
@@ -1437,15 +1436,13 @@ export const ProductEditorModal: React.FC<ProductEditorModalProps> = ({
                         {t('Khởi tạo bảng giá 5 mức kg', 'Enable 5-Tier Kg Pricing')}
                       </button>
                     ) : (
-                      category !== 'roasted_beans' && (
-                        <button
-                          type="button"
-                          onClick={() => setPricingTiers([])}
-                          className="px-2.5 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 font-semibold cursor-pointer"
-                        >
-                          {t('Tắt bảng giá kg', 'Remove Tier Pricing')}
-                        </button>
-                      )
+                      <button
+                        type="button"
+                        onClick={() => setPricingTiers([])}
+                        className="px-2.5 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 font-semibold cursor-pointer"
+                      >
+                        {t('Tắt bảng giá kg', 'Remove Tier Pricing')}
+                      </button>
                     )}
                   </div>
 

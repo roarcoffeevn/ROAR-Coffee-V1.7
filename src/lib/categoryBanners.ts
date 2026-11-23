@@ -4,6 +4,7 @@ export type CategoryBannerKey =
   | 'roasted_beans'
   | 'green_bean'
   | 'instant'
+  | 'pepper'
   | 'gift_voucher'
   | (string & {});
 
@@ -24,7 +25,7 @@ export interface CmsCategoryBanner {
 }
 
 export const CATEGORY_BANNER_OPTIONS: Array<{
-  key: 'all' | 'roasted' | 'roasted_beans' | 'green_bean' | 'instant' | 'gift_voucher';
+  key: 'all' | 'roasted' | 'roasted_beans' | 'green_bean' | 'instant' | 'pepper' | 'gift_voucher';
   labelVi: string;
   labelEn: string;
   route: string;
@@ -34,6 +35,7 @@ export const CATEGORY_BANNER_OPTIONS: Array<{
   { key: 'roasted_beans', labelVi: 'Cà phê Hạt Rang (kg)', labelEn: 'Roasted Beans (kg)', route: '/coffee/roasted-beans' },
   { key: 'green_bean', labelVi: 'Cà phê Nhân Xanh', labelEn: 'Green Coffee Beans', route: '/coffee/green-coffee' },
   { key: 'instant', labelVi: 'Cà phê Hòa Tan', labelEn: 'Instant Coffee', route: '/coffee/instant' },
+  { key: 'pepper', labelVi: 'Tiêu Tây Nguyên', labelEn: 'Highland Pepper', route: '/coffee/pepper' },
   { key: 'gift_voucher', labelVi: 'Thẻ Quà Tặng Gift Voucher', labelEn: 'Gift Vouchers', route: '/coffee/gift-vouchers' },
 ];
 
@@ -122,10 +124,27 @@ export const DEFAULT_CATEGORY_BANNERS: CmsCategoryBanner[] = [
       'Hòa tan tinh khiết tiện lợi cho nhịp sống bận rộn, công tác và văn phòng hiện đại mà vẫn giữ được hậu vị sô-cô-la và độ thơm đặc trưng của ROAR.',
     subtitleEn:
       'Crafted for modern offices, travel, and brisk mornings—delivering crisp espresso depth and lingering roasted aromatics in an instant pour.',
-    imageUrl: '/assets/instant/instant-gold.jpg',
+    imageUrl: 'instant_3in1_box_chill',
     ctaLabelVi: 'Xem Công thức Pha nhanh',
     ctaLabelEn: 'View Quick Brew Recipes',
     ctaPath: '/brewing-handbook',
+    visible: true,
+  },
+  {
+    id: 'cat-pepper',
+    categoryKey: 'pepper',
+    eyebrowVi: 'ĐẶC SẢN TÂY NGUYÊN · NGUYÊN CHẤT 100%',
+    eyebrowEn: 'CENTRAL HIGHLANDS SPECIALTY · 100% PURE PEPPER',
+    titleVi: 'Tiêu Đen & Tiêu Sọ Tây Nguyên — Hũ Thủy Tinh & Cối Xay Tiện Lợi',
+    titleEn: 'Highland Black & White Pepper — Glass Jars & Built-In Grinders',
+    subtitleVi:
+      '6 dòng tiêu đặc sản Đắk Lắk – Gia Lai (Tiêu Đen Xay 45g/90g, Tiêu Đen Sọ 45g/90g, Tiêu Đen & Tiêu Sọ Hạt Cối Xay 70g) cay nồng chuẩn vị.',
+    subtitleEn:
+      '6 Dak Lak & Gia Lai peppercorn specialties including ground black pepper, whole white pepper, and convenient 70g built-in grinder jars.',
+    imageUrl: 'pepper_black_grinder_jar',
+    ctaLabelVi: 'Khám phá Vùng nguyên liệu',
+    ctaLabelEn: 'Explore Highland Origins',
+    ctaPath: '/origins',
     visible: true,
   },
   {

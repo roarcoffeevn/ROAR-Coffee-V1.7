@@ -15,6 +15,7 @@ import {
   Eye,
   FileEdit,
   FileText,
+  Gamepad2,
   Image as ImageIcon,
   ImagePlus,
   KeyRound,
@@ -63,14 +64,16 @@ import { PagesManagerSection } from '../components/admin/PagesManagerSection';
 import { TeamRbacSection, type AdminTeamMember, type NonAdminCandidate } from '../components/admin/TeamRbacSection';
 import { AdminMenuCategoryManager } from '../components/admin/AdminMenuCategoryManager';
 import { AdminHeroBannerManager } from '../components/admin/AdminHeroBannerManager';
+import { AdminGamesManager } from '../components/admin/AdminGamesManager';
 import { ResetPasswordModal, type ResetPasswordTarget } from '../components/admin/ResetPasswordModal';
 
-type CmsSection = AdminPermission | 'menus' | 'hero';
+type CmsSection = AdminPermission | 'menus' | 'hero' | 'games';
 
 const CATEGORY_LABELS_VI: Record<string, string> = {
   roasted: 'Cà phê Rang xay',
-  roasted_beans: 'Cà phê Hạt rang (kg)',
+  roasted_beans: 'Cà phê Hạt rang',
   instant: 'Cà phê Hòa tan',
+  pepper: 'Tiêu Tây Nguyên',
   green_bean: 'Nhân xanh B2B',
 };
 
@@ -140,7 +143,7 @@ export const AdminCmsPage: React.FC = () => {
   const [teamAuditLogs, setTeamAuditLogs] = useState<any[]>([]);
 
   // Products filters & modals
-  const [prodCatFilter, setProdCatFilter] = useState<'all' | 'roasted' | 'roasted_beans' | 'instant' | 'green_bean'>('all');
+  const [prodCatFilter, setProdCatFilter] = useState<'all' | 'roasted' | 'roasted_beans' | 'instant' | 'pepper' | 'green_bean'>('all');
   const [prodSearch, setProdSearch] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
@@ -308,7 +311,9 @@ export const AdminCmsPage: React.FC = () => {
       requestedSectionParam &&
       (requestedSectionParam === 'menus' || requestedSectionParam === 'hero'
         ? hasAdminPermission(user, 'settings')
-        : hasAdminPermission(user, requestedSectionParam))
+        : requestedSectionParam === 'games'
+          ? hasAdminPermission(user, 'promotions')
+          : hasAdminPermission(user, requestedSectionParam))
     ) {
       setSection(requestedSectionParam);
     }
@@ -843,6 +848,7 @@ export const AdminCmsPage: React.FC = () => {
           count: customers.length,
         },
         { id: 'promotions', label: t('Khuyến mãi', 'Promotions'), icon: <Tag className="w-4 h-4" />, count: promotions.length },
+        { id: 'games', label: t('Game & Quà tặng', 'Games & Gifts'), icon: <Gamepad2 className="w-4 h-4" /> },
       ],
     },
     {
@@ -874,7 +880,9 @@ export const AdminCmsPage: React.FC = () => {
       items: grp.items.filter((item) =>
         item.id === 'menus' || item.id === 'hero'
           ? hasAdminPermission(user, 'settings')
-          : hasAdminPermission(user, item.id)
+          : item.id === 'games'
+            ? hasAdminPermission(user, 'promotions')
+            : hasAdminPermission(user, item.id)
       ),
     }))
     .filter((grp) => grp.items.length > 0);
@@ -1250,8 +1258,9 @@ export const AdminCmsPage: React.FC = () => {
                   {[
                     { id: 'all', label: `${t('Tất cả', 'All')} (${products.length})` },
                     { id: 'roasted', label: `${t('Rang xay', 'Roasted')} (${products.filter((p) => p.category === 'roasted').length})` },
-                    { id: 'roasted_beans', label: `${t('Hạt rang (kg)', 'Roasted Beans')} (${products.filter((p) => p.category === 'roasted_beans').length})` },
+                    { id: 'roasted_beans', label: `${t('Hạt rang', 'Roasted Beans')} (${products.filter((p) => p.category === 'roasted_beans').length})` },
                     { id: 'instant', label: `${t('Hòa tan', 'Instant')} (${products.filter((p) => p.category === 'instant').length})` },
+                    { id: 'pepper', label: `${t('Tiêu Tây Nguyên', 'Pepper')} (${products.filter((p) => p.category === 'pepper').length})` },
                     { id: 'green_bean', label: `${t('Nhân xanh', 'Green')} (${products.filter((p) => p.category === 'green_bean').length})` },
                   ].map((tb) => (
                     <button
@@ -2403,6 +2412,11 @@ export const AdminCmsPage: React.FC = () => {
                 </table>
               </div>
             </div>
+          )}
+
+          {/* 7B. MINI-GAMES, REWARDS & ATTACHED GIFTS (GAME & QUÀ TẶNG) */}
+          {resolvedSection === 'games' && hasAdminPermission(user, 'promotions') && (
+            <AdminGamesManager />
           )}
 
           {/* 8. B2B INQUIRIES & NEWSLETTER SUBSCRIBERS (YÊU CẦU & NEWSLETTER) */}

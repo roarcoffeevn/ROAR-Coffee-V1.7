@@ -479,7 +479,7 @@ export const HomePage: React.FC = () => {
               titleEn: 'Instant Coffee',
               subVi: 'Bộ sưu tập Silver & Gold',
               subEn: 'Silver & Gold collections',
-              img: '/assets/instant/instant-gold.jpg',
+              img: 'instant_gold_chill',
             },
             {
               to: '/coffee/gift-vouchers',
@@ -1232,6 +1232,9 @@ export const HomePage: React.FC = () => {
             <div className="flex flex-wrap gap-3 pt-1">
               <Link to={localePath('/account')} className="px-5 py-2.5 bg-[#00552B] text-white text-sm font-medium rounded hover:bg-[#003D25]">
                 {t('Đăng ký / Đăng nhập', 'Join ROAR Members')}
+              </Link>
+              <Link to={localePath('/play')} className="px-5 py-2.5 bg-[#C6A667] text-[#111111] text-sm font-semibold rounded hover:bg-[#b59454]">
+                {t('Chơi Mini-Game Nhận Quà →', 'Play & Win Gifts →')}
               </Link>
               <Link to={localePath('/promotions')} className="px-5 py-2.5 border border-[#00552B]/30 dark:border-[#C6A667]/40 text-[#00552B] dark:text-[#C6A667] text-sm font-medium rounded hover:bg-[#00552B]/5">
                 {t('Xem tất cả ưu đãi', 'All Active Offers')}

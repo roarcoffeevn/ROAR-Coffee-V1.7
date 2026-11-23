@@ -20,6 +20,7 @@ import { HomePage } from './pages/HomePage';
 import { JournalArticlePage, JournalPage, PromotionsPage } from './pages/JournalPromotionsPages';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PersonalitiesPage } from './pages/PersonalitiesPage';
+import { PlayGamesPage } from './pages/PlayGamesPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ShopPage } from './pages/ShopPage';
 import {
@@ -136,12 +137,15 @@ function renderPublicRoutes() {
     <Route path="coffee/roasted-beans" element={<ShopPage defaultCategory="roasted_beans" />} />
     <Route path="coffee/green-coffee" element={<ShopPage defaultCategory="green_bean" />} />
     <Route path="coffee/instant" element={<ShopPage defaultCategory="instant" />} />
+    <Route path="coffee/pepper" element={<ShopPage defaultCategory="pepper" />} />
     <Route path="coffee/gift-vouchers" element={<ShopPage defaultCategory="gift_voucher" />} />
     <Route path="coffee/green-beans" element={<GreenCoffeePage />} />
     <Route path="green-coffee" element={<GreenCoffeePage />} />
     <Route path="category/roasted-coffee" element={<ShopPage defaultCategory="roasted" />} />
     <Route path="category/roasted-beans" element={<ShopPage defaultCategory="roasted_beans" />} />
     <Route path="category/instant" element={<ShopPage defaultCategory="instant" />} />
+    <Route path="category/pepper" element={<ShopPage defaultCategory="pepper" />} />
+    <Route path="pepper" element={<ShopPage defaultCategory="pepper" />} />
     <Route path="category/gift-vouchers" element={<ShopPage defaultCategory="gift_voucher" />} />
     <Route path="category/green-coffee" element={<ShopPage defaultCategory="green_bean" />} />
     <Route path="b2b" element={<PartnersPage />} />
@@ -162,6 +166,9 @@ function renderPublicRoutes() {
     <Route path="signature-reserve" element={<SignatureReservePage />} />
     <Route path="farm-membership" element={<FarmMembershipPage />} />
     <Route path="promotions" element={<PromotionsPage />} />
+    <Route path="play" element={<PlayGamesPage />} />
+    <Route path="games" element={<PlayGamesPage />} />
+    <Route path="roar-play" element={<PlayGamesPage />} />
     <Route path="partners" element={<PartnersPage />} />
     <Route path="oem-export" element={<OemExportPage />} />
     <Route path="journal" element={<JournalPage />} />

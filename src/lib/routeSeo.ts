@@ -108,6 +108,30 @@ const STATIC_ROUTE_SEO: Record<string, RouteSeoMeta> = {
     descEn:
       'Convenient Silver & Gold instant coffee sachets crafted for rich Vietnamese character anytime, anywhere.',
   },
+  '/coffee/pepper': {
+    titleVi: 'Tiêu Đen & Tiêu Sọ Tây Nguyên Nguyên Chất | ROAR COFFEE®',
+    titleEn: 'Highland Black & White Pepper Jars & Grinders | ROAR COFFEE®',
+    descVi:
+      'Đặc sản Tiêu Đen Xay 45g/90g, Tiêu Đen Sọ 45g/90g và Tiêu Hạt Cối Xay 70g tuyển chọn từ nông trại đất đỏ bazan Tây Nguyên.',
+    descEn:
+      'Pure Central Highlands black & white pepper jars (45g/90g) and 70g built-in grinder bottles sourced from Dak Lak & Gia Lai.',
+  },
+  '/category/pepper': {
+    titleVi: 'Tiêu Đen & Tiêu Sọ Tây Nguyên Nguyên Chất | ROAR COFFEE®',
+    titleEn: 'Highland Black & White Pepper Jars & Grinders | ROAR COFFEE®',
+    descVi:
+      'Đặc sản Tiêu Đen Xay 45g/90g, Tiêu Đen Sọ 45g/90g và Tiêu Hạt Cối Xay 70g tuyển chọn từ nông trại đất đỏ bazan Tây Nguyên.',
+    descEn:
+      'Pure Central Highlands black & white pepper jars (45g/90g) and 70g built-in grinder bottles sourced from Dak Lak & Gia Lai.',
+  },
+  '/pepper': {
+    titleVi: 'Tiêu Đen & Tiêu Sọ Tây Nguyên Nguyên Chất | ROAR COFFEE®',
+    titleEn: 'Highland Black & White Pepper Jars & Grinders | ROAR COFFEE®',
+    descVi:
+      'Đặc sản Tiêu Đen Xay 45g/90g, Tiêu Đen Sọ 45g/90g và Tiêu Hạt Cối Xay 70g tuyển chọn từ nông trại đất đỏ bazan Tây Nguyên.',
+    descEn:
+      'Pure Central Highlands black & white pepper jars (45g/90g) and 70g built-in grinder bottles sourced from Dak Lak & Gia Lai.',
+  },
   '/coffee/gift-vouchers': {
     titleVi: 'Thẻ Quà Tặng Điện Tử ROAR E-Voucher | ROAR COFFEE®',
     titleEn: 'ROAR Digital Gift E-Vouchers | ROAR COFFEE®',
@@ -219,6 +243,30 @@ const STATIC_ROUTE_SEO: Record<string, RouteSeoMeta> = {
       'Tổng hợp mã giảm giá, freeship, quà tặng thành viên và ưu đãi nạp Ví ROAR mới nhất.',
     descEn:
       'Active promo codes, free shipping milestones, welcome perks and ROAR Wallet bonus offers.',
+  },
+  '/play': {
+    titleVi: 'ROAR Play & Win — Mini-Game Săn Quà Cà Phê & Voucher | ROAR COFFEE®',
+    titleEn: 'ROAR Play & Win — Interactive Coffee Games & Real Gifts | ROAR COFFEE®',
+    descVi:
+      'Chơi 7 mini-game tương tác Vòng Quay, Lắc Điện Thoại, Xin Xăm Cà Phê, Đoán Gu, Lật Thẻ, Thu Hoạch Cao Nguyên và Rương Bí Ẩn để nhận điểm ROAR, voucher và quà tặng cà phê thật.',
+    descEn:
+      'Play 7 interactive coffee mini-games including Lucky Wheel, Shake & Win, Fortune Stick, Flavour Quiz, Memory Match, Highland Harvest and Mystery Chests to win points, vouchers and real coffee gifts.',
+  },
+  '/games': {
+    titleVi: 'ROAR Play & Win — Mini-Game Săn Quà Cà Phê & Voucher | ROAR COFFEE®',
+    titleEn: 'ROAR Play & Win — Interactive Coffee Games & Real Gifts | ROAR COFFEE®',
+    descVi:
+      'Chơi 7 mini-game tương tác tại ROAR COFFEE để nhận điểm ROAR, mã giảm giá và sản phẩm cà phê tặng kèm.',
+    descEn:
+      'Play 7 interactive ROAR COFFEE mini-games to earn points, vouchers and physical coffee gift prizes.',
+  },
+  '/roar-play': {
+    titleVi: 'ROAR Play & Win — Mini-Game Săn Quà Cà Phê & Voucher | ROAR COFFEE®',
+    titleEn: 'ROAR Play & Win — Interactive Coffee Games & Real Gifts | ROAR COFFEE®',
+    descVi:
+      'Chơi 7 mini-game tương tác tại ROAR COFFEE để nhận điểm ROAR, mã giảm giá và sản phẩm cà phê tặng kèm.',
+    descEn:
+      'Play 7 interactive ROAR COFFEE mini-games to earn points, vouchers and physical coffee gift prizes.',
   },
   '/partners': {
     titleVi: 'Đối Tác Bán Sỉ & HORECA (Quán, Khách Sạn, Văn Phòng) | ROAR COFFEE®',

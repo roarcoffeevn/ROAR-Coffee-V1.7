@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Award, Bell, CheckCheck, Copy, Gift, LogOut, PlusCircle, Printer, QrCode, RefreshCw, Shield, Sparkles, Tag, UserCheck, Wallet, X } from 'lucide-react';
+import { Award, Bell, CheckCheck, Copy, Gamepad2, Gift, LogOut, PlusCircle, Printer, QrCode, RefreshCw, Shield, Sparkles, Tag, UserCheck, Wallet, X } from 'lucide-react';
 import { useI18n } from '../i18n/I18nContext';
 import { useStore } from '../context/StoreContext';
 import { localizeLedgerEntry, localizeOrderStatus, localizePaymentStatus, localizeVariantLabel } from '../lib/i18nHelpers';
@@ -1418,6 +1418,105 @@ export const AccountPage: React.FC = () => {
       {tab === 'rewards' && dash && (
         <div className="space-y-8">
           <DailyCheckinGame onRewardClaimed={loadDashboard} />
+
+          {/* Mini-Game Arena CTA & Won Gifts / Vouchers */}
+          <div className="bg-white dark:bg-[#16221C] rounded-xl border border-[#202020]/10 dark:border-white/10 p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold flex items-center gap-2 text-[#202020] dark:text-[#F1EFEA]">
+                  <Gamepad2 className="w-5 h-5 text-[#00552B] dark:text-[#C6A667]" />
+                  <span>{t('Quà tặng & Mã thưởng Mini-Game ROAR', 'ROAR Mini-Game Gifts & Rewards')}</span>
+                </h2>
+                <p className="text-xs text-[#202020]/65 dark:text-[#F1EFEA]/65 mt-0.5">
+                  {t(
+                    'Chơi Vòng Quay, Gu Cà Phê, Lật Thẻ, Thu Hoạch Cao Nguyên và Rương Bí Ẩn để trúng điểm, voucher và sản phẩm cà phê.',
+                    'Play Lucky Wheel, Quiz, Memory, Highland Harvest & Mystery Box for points, vouchers, and coffee gifts.'
+                  )}
+                </p>
+              </div>
+              <Link
+                to={localePath('/play')}
+                className="px-4 py-2 rounded-lg bg-[#00552B] hover:bg-[#003D25] text-white text-xs font-semibold whitespace-nowrap"
+              >
+                {t('Vào Đấu Trường ROAR Play →', 'Open ROAR Play Arena →')}
+              </Link>
+            </div>
+
+            {Array.isArray(dash.gameClaims) && dash.gameClaims.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {dash.gameClaims.map((cl: any) => {
+                  const isGift = cl.reward_type === 'product_gift';
+                  const canRedeemAtCheckout =
+                    cl.status === 'active' &&
+                    (isGift || cl.reward_type === 'voucher_percent' || cl.reward_type === 'voucher_fixed' || cl.reward_type === 'free_shipping');
+                  return (
+                    <div
+                      key={cl.id}
+                      className="rounded-lg border border-[#202020]/10 dark:border-white/10 bg-[#F8F5EF] dark:bg-[#0E1512] p-3.5 flex flex-col justify-between gap-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-[#202020] dark:text-[#F1EFEA]">
+                            {lang === 'vi' ? cl.reward_label_vi : cl.reward_label_en}
+                          </p>
+                          {isGift && (cl.gift_product_name_vi || cl.gift_product_name_en) && (
+                            <p className="text-xs text-[#00552B] dark:text-[#C6A667] font-medium mt-0.5 flex items-center gap-1">
+                              <Gift className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {lang === 'vi' ? cl.gift_product_name_vi : cl.gift_product_name_en}
+                                {cl.gift_product_variant ? ` (${cl.gift_product_variant})` : ''}
+                              </span>
+                            </p>
+                          )}
+                          <p className="text-[11px] text-[#202020]/60 dark:text-[#F1EFEA]/60 mt-1">
+                            {t('Trạng thái:', 'Status:')}{' '}
+                            <strong className="uppercase">{cl.status}</strong>
+                            {cl.expires_at ? ` · HSD: ${String(cl.expires_at).slice(0, 10)}` : ''}
+                          </p>
+                        </div>
+                        <span className="font-mono text-xs font-bold text-[#00552B] dark:text-[#C6A667] bg-white dark:bg-[#16221C] px-2 py-1 rounded border border-[#00552B]/20 shrink-0">
+                          {cl.claim_code}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-[#202020]/8 dark:border-white/8">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(cl.claim_code);
+                            showToast(t(`Đã sao chép mã ${cl.claim_code}`, `Copied ${cl.claim_code}`));
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-[#202020]/15 dark:border-white/15 text-[11px] font-medium hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>{t('Sao chép', 'Copy')}</span>
+                        </button>
+                        {canRedeemAtCheckout && (
+                          <Link
+                            to={localePath('/checkout')}
+                            onClick={() => {
+                              try {
+                                window.sessionStorage.setItem('roar_pending_promo', cl.claim_code);
+                              } catch {
+                                // ignore
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#00552B] text-white text-[11px] font-semibold hover:bg-[#003D25]"
+                          >
+                            <span>{t('Dùng khi Thanh toán', 'Use at Checkout')}</span>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-[#202020]/65 dark:text-[#F1EFEA]/65">
+                {t('Bạn chưa có phần thưởng mini-game nào. Hãy thử vận may ngay tại ROAR Play!', 'No mini-game rewards claimed yet. Visit ROAR Play to spin and win!')}
+              </p>
+            )}
+          </div>
+
           <MembershipTierVisualizer
             currentTierName={activeTierName}
             lifetimeSpendVnd={lifetimeSpendVnd}

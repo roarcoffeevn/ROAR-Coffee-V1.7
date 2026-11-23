@@ -289,6 +289,7 @@ export const Header: React.FC = () => {
               { path: '/coffee/roasted-beans', vi: 'Cà phê Hạt Rang (kg)', en: 'Roasted Beans (kg)' },
               { path: '/coffee/green-coffee', vi: 'Cà phê Nhân Xanh', en: 'Green Coffee' },
               { path: '/coffee/instant', vi: 'Cà phê Hòa Tan', en: 'Instant Coffee' },
+              { path: '/coffee/pepper', vi: 'Tiêu Tây Nguyên', en: 'Highland Pepper' },
               { path: '/coffee/gift-vouchers', vi: 'Gift Voucher', en: 'Gift Voucher' },
               { path: '/shop', vi: 'Tất cả sản phẩm', en: 'All Products' },
             ].map((cat) => {
@@ -470,6 +471,11 @@ export const Header: React.FC = () => {
                     </Link>
                   </li>
                   <li className="pt-2 border-t border-[#202020]/10 dark:border-white/10">
+                    <Link to={localePath('/coffee/pepper')} onClick={closeAll} className="hover:text-[#00552B] font-semibold text-[#00552B] dark:text-[#C6A667]">
+                      {t('Tiêu Đen & Tiêu Sọ Tây Nguyên', 'Highland Black & White Pepper')}
+                    </Link>
+                  </li>
+                  <li>
                     <Link to={localePath('/coffee/gift-vouchers')} onClick={closeAll} className="hover:text-[#00552B] font-semibold text-[#00552B] dark:text-[#C6A667]">
                       {t('Thẻ Quà Tặng Gift Voucher (50k–1tr)', 'ROAR Gift Vouchers (50k–1M)')}
                     </Link>
@@ -602,6 +608,11 @@ export const Header: React.FC = () => {
                   <li className="pt-1.5 border-t border-[#202020]/10 dark:border-white/10">
                     <Link to={localePath('/farm-membership')} onClick={closeAll} className="hover:text-[#00552B] dark:hover:text-[#C6A667]">
                       {t('Trang trại ROAR & Thành viên (Định hướng)', 'ROAR Coffee Farm & Membership')}
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to={localePath('/play')} onClick={closeAll} className="font-semibold text-[#00552B] dark:text-[#C6A667] hover:underline">
+                      {t('ROAR Play & Win — Săn Quà Cà Phê', 'ROAR Play & Win — Interactive Gifts')}
                     </Link>
                   </li>
                 </ul>
@@ -743,6 +754,9 @@ export const Header: React.FC = () => {
                     <Link to={localePath('/coffee/instant')} onClick={closeAll} className="block py-1">
                       {t('Cà phê hòa tan Silver & Gold', 'Instant Coffee Silver & Gold')}
                     </Link>
+                    <Link to={localePath('/coffee/pepper')} onClick={closeAll} className="block py-1">
+                      {t('Tiêu Đen & Tiêu Sọ Tây Nguyên', 'Highland Black & White Pepper')}
+                    </Link>
                     <Link to={localePath('/coffee/gift-vouchers')} onClick={closeAll} className="block py-1">
                       {t('Thẻ quà tặng Gift Voucher', 'Gift Vouchers (50k–1M)')}
                     </Link>
@@ -807,6 +821,9 @@ export const Header: React.FC = () => {
                     </div>
                     <Link to={localePath('/farm-membership')} onClick={closeAll} className="block py-1">
                       {t('Trang trại ROAR & Thành viên', 'ROAR Farm & Membership')}
+                    </Link>
+                    <Link to={localePath('/play')} onClick={closeAll} className="block py-1 font-semibold text-[#00552B] dark:text-[#C6A667]">
+                      {t('ROAR Play & Win — Săn Quà', 'ROAR Play & Win — Gifts')}
                     </Link>
                   </div>
                 )}

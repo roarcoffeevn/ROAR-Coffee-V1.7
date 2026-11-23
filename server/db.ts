@@ -4,6 +4,11 @@ import path from 'node:path';
 import { ALL_ADMIN_PERMISSIONS, ADMIN_ROLE_PRESETS, hashPassword } from './auth.ts';
 import { exportCmsSnapshotToDisk, restoreFromSnapshot } from './snapshot.ts';
 import { buildFiveTierPrices, generateEan13Barcode } from '../src/lib/pricing.ts';
+import {
+  DEFAULT_CHECKIN_SCHEDULE,
+  DEFAULT_GAME_CONFIGS,
+  DEFAULT_GAME_REWARDS,
+} from '../src/lib/gamesCatalog.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -51,7 +56,7 @@ export function initDatabase(): void {
       slug TEXT NOT NULL UNIQUE,
       sku TEXT NOT NULL UNIQUE,
       barcode TEXT NOT NULL DEFAULT '',
-      category TEXT NOT NULL CHECK(category IN ('roasted', 'roasted_beans', 'green_bean', 'instant')),
+      category TEXT NOT NULL CHECK(category IN ('roasted', 'roasted_beans', 'green_bean', 'instant', 'pepper')),
       sub_category TEXT DEFAULT '',
       name_vi TEXT NOT NULL,
       name_en TEXT NOT NULL,
@@ -348,6 +353,88 @@ export function initDatabase(): void {
       sections_json TEXT NOT NULL DEFAULT '[]',
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS game_configs (
+      game_key TEXT PRIMARY KEY,
+      title_vi TEXT NOT NULL,
+      title_en TEXT NOT NULL,
+      subtitle_vi TEXT NOT NULL DEFAULT '',
+      subtitle_en TEXT NOT NULL DEFAULT '',
+      daily_free_plays INTEGER NOT NULL DEFAULT 1,
+      extra_play_cost_points INTEGER NOT NULL DEFAULT 30,
+      min_score_to_win INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS game_rewards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      game_key TEXT NOT NULL,
+      slot_order INTEGER NOT NULL DEFAULT 1,
+      label_vi TEXT NOT NULL,
+      label_en TEXT NOT NULL,
+      description_vi TEXT NOT NULL DEFAULT '',
+      description_en TEXT NOT NULL DEFAULT '',
+      reward_type TEXT NOT NULL CHECK(reward_type IN ('points', 'voucher_percent', 'voucher_fixed', 'free_shipping', 'product_gift')),
+      reward_value INTEGER NOT NULL DEFAULT 0,
+      min_order_value INTEGER NOT NULL DEFAULT 0,
+      max_discount INTEGER NOT NULL DEFAULT 0,
+      gift_product_id INTEGER,
+      gift_product_slug TEXT NOT NULL DEFAULT '',
+      gift_product_name_vi TEXT NOT NULL DEFAULT '',
+      gift_product_name_en TEXT NOT NULL DEFAULT '',
+      gift_product_variant TEXT NOT NULL DEFAULT '',
+      gift_image_key TEXT NOT NULL DEFAULT 'product_robusta_house',
+      weight INTEGER NOT NULL DEFAULT 10,
+      stock_total INTEGER NOT NULL DEFAULT -1,
+      stock_remaining INTEGER NOT NULL DEFAULT -1,
+      color_hex TEXT NOT NULL DEFAULT '#00552B',
+      badge_vi TEXT NOT NULL DEFAULT '',
+      badge_en TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS game_plays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      game_key TEXT NOT NULL,
+      play_date TEXT NOT NULL,
+      used_points INTEGER NOT NULL DEFAULT 0,
+      score INTEGER NOT NULL DEFAULT 0,
+      reward_id INTEGER,
+      claim_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS game_reward_claims (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      game_key TEXT NOT NULL,
+      reward_id INTEGER,
+      claim_code TEXT NOT NULL UNIQUE,
+      reward_type TEXT NOT NULL CHECK(reward_type IN ('points', 'voucher_percent', 'voucher_fixed', 'free_shipping', 'product_gift')),
+      reward_label_vi TEXT NOT NULL,
+      reward_label_en TEXT NOT NULL,
+      reward_value INTEGER NOT NULL DEFAULT 0,
+      promo_code TEXT NOT NULL DEFAULT '',
+      gift_product_id INTEGER,
+      gift_product_slug TEXT NOT NULL DEFAULT '',
+      gift_product_name_vi TEXT NOT NULL DEFAULT '',
+      gift_product_name_en TEXT NOT NULL DEFAULT '',
+      gift_product_variant TEXT NOT NULL DEFAULT '',
+      gift_image_key TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'redeemed', 'fulfilled', 'expired', 'cancelled')),
+      redeemed_order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      redeemed_at TEXT,
+      expires_at TEXT NOT NULL,
+      admin_note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_game_rewards_key ON game_rewards(game_key, slot_order);
+    CREATE INDEX IF NOT EXISTS idx_game_plays_user_date ON game_plays(user_id, game_key, play_date);
+    CREATE INDEX IF NOT EXISTS idx_game_claims_user ON game_reward_claims(user_id, status);
   `);
 
   ensureProductsSchemaUpgraded();
@@ -359,7 +446,7 @@ export function initDatabase(): void {
 
 function ensureProductsSchemaUpgraded(): void {
   const tbl = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='products'").get() as { sql: string } | undefined;
-  if (tbl && !tbl.sql.includes("'roasted_beans'")) {
+  if (tbl && (!tbl.sql.includes("'roasted_beans'") || !tbl.sql.includes("'pepper'"))) {
     const existingCols = (db.prepare('PRAGMA table_info(products)').all() as Array<{ name: string }>).map((c) => c.name);
     const hasBarcode = existingCols.includes('barcode');
     const hasPricingTiers = existingCols.includes('pricing_tiers_json');
@@ -373,7 +460,7 @@ function ensureProductsSchemaUpgraded(): void {
           slug TEXT NOT NULL UNIQUE,
           sku TEXT NOT NULL UNIQUE,
           barcode TEXT NOT NULL DEFAULT '',
-          category TEXT NOT NULL CHECK(category IN ('roasted', 'roasted_beans', 'green_bean', 'instant')),
+          category TEXT NOT NULL CHECK(category IN ('roasted', 'roasted_beans', 'green_bean', 'instant', 'pepper')),
           sub_category TEXT DEFAULT '',
           name_vi TEXT NOT NULL,
           name_en TEXT NOT NULL,
@@ -3021,8 +3108,8 @@ function runIncrementalMigrations(): void {
 
   // 10. Upgrade remaining Instant & Gift Voucher legacy image keys to bespoke ROAR AI photography
   const customImageUpgrades: Array<{ slug: string; target: string; legacyKeys: string[] }> = [
-    { slug: 'instant-silver-collection', target: '/assets/instant/instant-silver.jpg', legacyKeys: ['product_instant_silver_gold'] },
-    { slug: 'instant-gold-collection', target: '/assets/instant/instant-gold.jpg', legacyKeys: ['product_instant_silver_gold'] },
+    { slug: 'instant-silver-collection', target: 'instant_silver_chill', legacyKeys: ['product_instant_silver_gold', '/assets/instant/instant-silver.jpg'] },
+    { slug: 'instant-gold-collection', target: 'instant_gold_chill', legacyKeys: ['product_instant_silver_gold', '/assets/instant/instant-gold.jpg'] },
     { slug: 'gift-voucher-50k', target: '/assets/vouchers/gift-voucher-50k.jpg', legacyKeys: ['hero-roast', 'product_robusta_house'] },
     { slug: 'gift-voucher-100k', target: '/assets/vouchers/gift-voucher-100k.jpg', legacyKeys: ['signature-reserve', 'product_signature_reserve'] },
     { slug: 'gift-voucher-500k', target: '/assets/vouchers/gift-voucher-500k.jpg', legacyKeys: ['signature-reserve', 'product_signature_reserve'] },
@@ -3106,6 +3193,158 @@ function runIncrementalMigrations(): void {
   const updateCatStmt = db.prepare('UPDATE journal_articles SET category = ? WHERE category = ?');
   for (const [legacyCat, canonicalCat] of Object.entries(categoryNormalizationMap)) {
     updateCatStmt.run(canonicalCat, legacyCat);
+  }
+
+  // 13. Seed Interactive Mini-Game configs, rewards (idempotent per game_key), and configurable check-in schedule
+  const insertCfg = db.prepare(`
+    INSERT OR IGNORE INTO game_configs (
+      game_key, title_vi, title_en, subtitle_vi, subtitle_en,
+      daily_free_plays, extra_play_cost_points, min_score_to_win, active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const cfg of DEFAULT_GAME_CONFIGS) {
+    insertCfg.run(
+      cfg.game_key,
+      cfg.title_vi,
+      cfg.title_en,
+      cfg.subtitle_vi,
+      cfg.subtitle_en,
+      cfg.daily_free_plays,
+      cfg.extra_play_cost_points,
+      cfg.min_score_to_win,
+      cfg.active
+    );
+  }
+
+  const countRewardsByKeyStmt = db.prepare('SELECT COUNT(*) as c FROM game_rewards WHERE game_key = ?');
+  const insertReward = db.prepare(`
+    INSERT INTO game_rewards (
+      game_key, slot_order, label_vi, label_en, description_vi, description_en,
+      reward_type, reward_value, min_order_value, max_discount,
+      gift_product_id, gift_product_slug, gift_product_name_vi, gift_product_name_en, gift_product_variant, gift_image_key,
+      weight, stock_total, stock_remaining, color_hex, badge_vi, badge_en, active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const prodBySlug = db.prepare('SELECT id FROM products WHERE slug = ?');
+  const seededKeys = new Set<string>();
+  for (const rw of DEFAULT_GAME_REWARDS) {
+    if (!seededKeys.has(rw.game_key)) {
+      const existingCount = (countRewardsByKeyStmt.get(rw.game_key) as { c: number }).c;
+      if (existingCount > 0) continue;
+      seededKeys.add(rw.game_key);
+    }
+    let resolvedProdId = rw.gift_product_id;
+    if (rw.gift_product_slug) {
+      const matchedProd = prodBySlug.get(rw.gift_product_slug) as { id: number } | undefined;
+      if (matchedProd) resolvedProdId = matchedProd.id;
+    }
+    insertReward.run(
+      rw.game_key,
+      rw.slot_order,
+      rw.label_vi,
+      rw.label_en,
+      rw.description_vi,
+      rw.description_en,
+      rw.reward_type,
+      rw.reward_value,
+      rw.min_order_value,
+      rw.max_discount,
+      resolvedProdId,
+      rw.gift_product_slug,
+      rw.gift_product_name_vi,
+      rw.gift_product_name_en,
+      rw.gift_product_variant,
+      rw.gift_image_key,
+      rw.weight,
+      rw.stock_total,
+      rw.stock_remaining,
+      rw.color_hex,
+      rw.badge_vi,
+      rw.badge_en,
+      rw.active
+    );
+  }
+
+  const checkinScheduleRow = db.prepare("SELECT key FROM site_settings WHERE key = 'checkin_schedule_json'").get();
+  if (!checkinScheduleRow) {
+    db.prepare('INSERT OR IGNORE INTO site_settings (key, value) VALUES (?, ?)').run(
+      'checkin_schedule_json',
+      JSON.stringify(DEFAULT_CHECKIN_SCHEDULE)
+    );
+  }
+
+  // 14. Seed 16 new retail Coffee & Highland Pepper lines idempotently
+  const insertRetailProduct = db.prepare(`
+    INSERT OR IGNORE INTO products (
+      slug, sku, barcode, category, sub_category, name_vi, name_en, subtitle_vi, subtitle_en,
+      description_vi, description_en, coffee_type, blend_summary_vi, blend_summary_en, blend_public,
+      roast_profile_vi, roast_profile_en, tasting_notes_vi, tasting_notes_en,
+      brewing_methods_json, variants_json, pricing_tiers_json, packaging_options_json,
+      price_vnd, price_usd, inventory, moq, status, is_demo_data,
+      mascot_slug, screen_size, processing_method, origin_region,
+      harvest_year, moisture_content, density, defect_info, grading_spec,
+      image_key, gallery_images_json, featured
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, 'active', 0, ?, ?, ?, ?, ?, ?, 'N/A', 'Kiểm soát sạch tạp chất', ?, ?, '[]', ?)
+  `);
+
+  for (const item of RETAIL_NEW_LINES_SEEDS) {
+    const priceUsd = Math.round((item.price_vnd / activeVcbRate) * 100) / 100;
+    const variants = [{ label: item.variant_label, priceVnd: item.price_vnd, priceUsd }];
+    insertRetailProduct.run(
+      item.slug,
+      item.sku,
+      item.barcode,
+      item.category,
+      item.sub_category,
+      item.name_vi,
+      item.name_en,
+      item.subtitle_vi,
+      item.subtitle_en,
+      item.description_vi,
+      item.description_en,
+      item.coffee_type,
+      item.blend_summary_vi,
+      item.blend_summary_en,
+      item.roast_profile_vi,
+      item.roast_profile_en,
+      item.tasting_notes_vi,
+      item.tasting_notes_en,
+      JSON.stringify(item.brewing_methods),
+      JSON.stringify(variants),
+      JSON.stringify([item.unit_pack_label]),
+      item.price_vnd,
+      priceUsd,
+      item.inventory,
+      item.moq,
+      item.mascot_slug,
+      item.screen_size,
+      item.processing_method,
+      item.origin_region,
+      item.harvest_year,
+      item.moisture_content,
+      item.grading_spec,
+      item.image_key,
+      item.featured
+    );
+  }
+
+  // 15. Upgrade pepper & instant coffee image_keys to photorealistic & chill studio photography
+  const retailPhotoUpgrades: Array<[string, string, string[]]> = [
+    ['ca-phe-hoa-tan-3in1-hop-10-goi', 'instant_3in1_box_chill', ['/assets/instant/instant-silver.jpg', 'product_instant_silver_gold']],
+    ['ca-phe-hoa-tan-3in1-tui-45-goi', 'instant_3in1_pouch_45_chill', ['/assets/instant/instant-gold.jpg', 'product_instant_silver_gold']],
+    ['ca-phe-muoi-hop-10-goi', 'instant_salted_coffee_chill', ['product_instant_silver_gold', '/assets/instant/instant-gold.jpg']],
+    ['tieu-den-xay-45g', 'pepper_ground_black_jar', ['/assets/pepper/tieu-den-xay.svg']],
+    ['tieu-den-xay-90g', 'pepper_ground_black_jar', ['/assets/pepper/tieu-den-xay.svg']],
+    ['tieu-den-so-45g', 'pepper_hulled_white_jar', ['/assets/pepper/tieu-den-so.svg']],
+    ['tieu-den-so-90g', 'pepper_hulled_white_jar', ['/assets/pepper/tieu-den-so.svg']],
+    ['tieu-den-hat-coi-xay-70g', 'pepper_black_grinder_jar', ['/assets/pepper/tieu-den-coi-xay.svg']],
+    ['tieu-so-hat-coi-xay-70g', 'pepper_white_grinder_jar', ['/assets/pepper/tieu-so-coi-xay.svg']],
+  ];
+  for (const [slug, nextKey, legacyList] of retailPhotoUpgrades) {
+    const row = db.prepare('SELECT id, image_key FROM products WHERE slug = ?').get(slug) as { id: number; image_key: string } | undefined;
+    if (row && (!row.image_key || legacyList.includes(row.image_key))) {
+      db.prepare('UPDATE products SET image_key = ? WHERE id = ?').run(nextKey, row.id);
+    }
   }
 }
 
@@ -3437,6 +3676,635 @@ const ROASTED_COFFEE_BEANS_SEEDS: Array<{
     origin_region: 'Krông Năng – Đắk Lắk',
     harvest_year: 'Vụ mùa mới nhất (Rang tươi theo tuần)',
     grading_spec: 'RO-S18-HONEY · Chế biến mật ong 100% quả chín đỏ',
+    featured: 1,
+  },
+];
+
+const RETAIL_NEW_LINES_SEEDS: Array<{
+  slug: string;
+  sku: string;
+  barcode: string;
+  category: 'roasted' | 'roasted_beans' | 'instant' | 'pepper';
+  sub_category: string;
+  name_vi: string;
+  name_en: string;
+  subtitle_vi: string;
+  subtitle_en: string;
+  description_vi: string;
+  description_en: string;
+  coffee_type: string;
+  blend_summary_vi: string;
+  blend_summary_en: string;
+  roast_profile_vi: string;
+  roast_profile_en: string;
+  tasting_notes_vi: string;
+  tasting_notes_en: string;
+  brewing_methods: string[];
+  variant_label: string;
+  unit_pack_label: string;
+  price_vnd: number;
+  inventory: number;
+  moq: string;
+  mascot_slug: string;
+  screen_size: string;
+  processing_method: string;
+  origin_region: string;
+  harvest_year: string;
+  moisture_content: string;
+  grading_spec: string;
+  image_key: string;
+  featured: number;
+}> = [
+  {
+    slug: 'ca-phe-rang-xay-dam-500g',
+    sku: 'RC-RX-DAM-500G',
+    barcode: generateEan13Barcode(9201),
+    category: 'roasted',
+    sub_category: 'Rang xay 500g',
+    name_vi: 'Cà Phê Rang Xay Đậm gói 500 G',
+    name_en: 'ROAR Bold Ground Coffee 500g Pack',
+    subtitle_vi: 'Gói 500g · Đậm vị truyền thống, hậu sô-cô-la đắng dịu chuẩn Phin Việt',
+    subtitle_en: '500g Pack · Full-bodied traditional roast with rich cocoa depth',
+    description_vi:
+      'Cà Phê Rang Xay Đậm gói 500g được phối trộn và rang mộc 100% nhằm mang lại tách cà phê đen đá hoặc cà phê sữa đá đậm đà, dày vị, lưu hương lâu và không tẩm ướp hương liệu tổng hợp.',
+    description_en:
+      'Pure 100% drum-roasted Bold Ground Coffee in a 500g family pouch, crafted for intense Vietnamese iced black or condensed-milk phin coffee with clean lingering depth.',
+    coffee_type: '500g Ground Roast',
+    blend_summary_vi: 'Phối trộn Robusta & Culi rang đậm chuẩn gu Phin truyền thống',
+    blend_summary_en: 'Bold Robusta & Culi dark roast for traditional Phin brewing',
+    roast_profile_vi: 'Rang Đậm (Dark Roast)',
+    roast_profile_en: 'Dark Roast',
+    tasting_notes_vi: 'Đậm mạnh · Sô-cô-la đen · Đường nâu cháy · Hậu vị dày',
+    tasting_notes_en: 'Full body · Dark chocolate · Caramelized sugar · Long finish',
+    brewing_methods: ['Vietnamese Phin', 'Iced Milk Coffee', 'Moka Pot'],
+    variant_label: 'Gói 500g',
+    unit_pack_label: 'Gói 500g',
+    price_vnd: 139000,
+    inventory: 160,
+    moq: '1 gói',
+    mascot_slug: 'tiger',
+    screen_size: 'S16/S18',
+    processing_method: 'Natural & CBU',
+    origin_region: 'Đắk Lắk – Tây Nguyên',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 5.0% (Rang xay)',
+    grading_spec: 'Gói 500g van 1 chiều bảo quản hương',
+    image_key: '/assets/roasted-ground/roar-dam-bold.jpg',
+    featured: 1,
+  },
+  {
+    slug: 'ca-phe-rang-xay-hai-hoa-500g',
+    sku: 'RC-RX-HH-500G',
+    barcode: generateEan13Barcode(9202),
+    category: 'roasted',
+    sub_category: 'Rang xay 500g',
+    name_vi: 'Cà Phê Rang Xay Hài Hoà gói 500 G',
+    name_en: 'ROAR Balanced Ground Coffee 500g Pack',
+    subtitle_vi: 'Gói 500g · Cân bằng giữa vị đắng thanh và hương thơm dịu nhẹ mỗi ngày',
+    subtitle_en: '500g Pack · Harmonized roast balancing smooth body and gentle sweetness',
+    description_vi:
+      'Cà Phê Rang Xay Hài Hoà gói 500g kết hợp cân đối giữa độ đậm của Robusta cao nguyên và nét thơm thanh từ Arabica, phù hợp uống hàng ngày tại gia đình và văn phòng.',
+    description_en:
+      'Balanced Ground Coffee 500g harmoniously blends highland Robusta richness with mellow Arabica aromatics for smooth everyday phin or drip cups.',
+    coffee_type: '500g Ground Roast',
+    blend_summary_vi: 'Phối trộn cân bằng Robusta & Arabica rang vừa-đậm',
+    blend_summary_en: 'Balanced Robusta & Arabica medium-dark daily blend',
+    roast_profile_vi: 'Rang Vừa-Đậm (Medium-Dark Roast)',
+    roast_profile_en: 'Medium-Dark Roast',
+    tasting_notes_vi: 'Hài hoà · Hạt dẻ rang · Ca cao sữa · Êm dịu dễ uống',
+    tasting_notes_en: 'Balanced · Roasted hazelnut · Milk cocoa · Smooth finish',
+    brewing_methods: ['Vietnamese Phin', 'Iced Milk Coffee', 'French Press'],
+    variant_label: 'Gói 500g',
+    unit_pack_label: 'Gói 500g',
+    price_vnd: 149000,
+    inventory: 150,
+    moq: '1 gói',
+    mascot_slug: 'lion',
+    screen_size: 'S16/S18',
+    processing_method: 'Washed & Natural',
+    origin_region: 'Đắk Lắk & Lâm Đồng',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 5.0% (Rang xay)',
+    grading_spec: 'Gói 500g van 1 chiều bảo quản hương',
+    image_key: '/assets/roasted-ground/robusta-house-blend.jpg',
+    featured: 0,
+  },
+  {
+    slug: 'ca-phe-rang-xay-thom-500g',
+    sku: 'RC-RX-THM-500G',
+    barcode: generateEan13Barcode(9203),
+    category: 'roasted',
+    sub_category: 'Rang xay 500g',
+    name_vi: 'Cà Phê Rang Xay Thơm gói 500 G',
+    name_en: 'ROAR Aromatic Ground Coffee 500g Pack',
+    subtitle_vi: 'Gói 500g · Hương hoa quả chín thanh tao, hậu ngọt dịu tinh tế',
+    subtitle_en: '500g Pack · Elevated floral aroma with bright caramel sweetness',
+    description_vi:
+      'Cà Phê Rang Xay Thơm gói 500g tăng cường tỷ lệ hạt Arabica Cầu Đất rang ở mức vừa để bung tỏa nốt hương hoa cà phê, caramel và trái cây chín thanh lịch.',
+    description_en:
+      'Aromatic Ground Coffee 500g emphasizes highland Arabica roasted to Medium to highlight floral fragrance, caramel, and clean crisp sweetness.',
+    coffee_type: '500g Ground Roast',
+    blend_summary_vi: 'Tăng cường Arabica Cầu Đất cho tầng hương thơm nổi bật',
+    blend_summary_en: 'Arabica-forward aromatic blend with sweet clean body',
+    roast_profile_vi: 'Rang Vừa (Medium Roast)',
+    roast_profile_en: 'Medium Roast',
+    tasting_notes_vi: 'Hương hoa thơm · Caramel · Chua thanh dịu · Hậu ngọt',
+    tasting_notes_en: 'Floral fragrance · Caramel · Gentle citrus · Sweet aftertaste',
+    brewing_methods: ['Vietnamese Phin', 'Pour-over', 'French Press', 'Cold Brew'],
+    variant_label: 'Gói 500g',
+    unit_pack_label: 'Gói 500g',
+    price_vnd: 159000,
+    inventory: 140,
+    moq: '1 gói',
+    mascot_slug: 'fox',
+    screen_size: 'S18 Selected',
+    processing_method: 'CBU Washed & Honey',
+    origin_region: 'Cầu Đất – Lâm Đồng',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 5.0% (Rang xay)',
+    grading_spec: 'Gói 500g van 1 chiều bảo quản hương',
+    image_key: '/assets/roasted-ground/arabica-selection.jpg',
+    featured: 0,
+  },
+  {
+    slug: 'ca-phe-rang-xay-espresso-500g',
+    sku: 'RC-RX-ESP-500G',
+    barcode: generateEan13Barcode(9204),
+    category: 'roasted',
+    sub_category: 'Rang xay 500g',
+    name_vi: 'Cà Phê Rang Xay Espresso gói 500 G',
+    name_en: 'ROAR Espresso Ground Coffee 500g Pack',
+    subtitle_vi: 'Gói 500g · Độ mịn chuẩn máy pha Espresso, lớp crema dày mịn',
+    subtitle_en: '500g Pack · Precision Espresso grind engineered for thick amber crema',
+    description_vi:
+      'Cà Phê Rang Xay Espresso gói 500g xay mịn chuẩn xác cho máy Espresso gia đình, văn phòng và ấm Moka Pot, cho lớp crema vàng hổ phách dày dặn và hậu vị sô-cô-la mượt mà.',
+    description_en:
+      'Precision-ground Espresso 500g pouch dialed for home espresso machines and Moka Pots, extracting thick tiger-striped crema and rich chocolate-nut notes.',
+    coffee_type: '500g Ground Roast',
+    blend_summary_vi: 'Phối trộn Espresso chuyên dụng cho pha máy & Moka Pot',
+    blend_summary_en: 'Dedicated Espresso blend calibrated for pressure extraction',
+    roast_profile_vi: 'Rang Espresso Tinh Chỉnh (Medium-Dark)',
+    roast_profile_en: 'Medium-Dark Espresso',
+    tasting_notes_vi: 'Crema dày · Sô-cô-la sữa · Hạnh nhân rang · Mật mía',
+    tasting_notes_en: 'Thick crema · Milk chocolate · Toasted almond · Cane sugar',
+    brewing_methods: ['Espresso', 'Moka Pot'],
+    variant_label: 'Gói 500g (Xay Espresso)',
+    unit_pack_label: 'Gói 500g',
+    price_vnd: 199000,
+    inventory: 130,
+    moq: '1 gói',
+    mascot_slug: 'eagle',
+    screen_size: 'S18 Selected',
+    processing_method: 'CBU Washed',
+    origin_region: 'Lâm Đồng & Đắk Lắk',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 5.0% (Rang xay)',
+    grading_spec: 'Gói 500g xay chuẩn Espresso áp suất 9 bar',
+    image_key: '/assets/roasted-ground/roar-espresso.jpg',
+    featured: 1,
+  },
+  {
+    slug: 'ca-phe-hat-arabica-200g',
+    sku: 'RC-HAT-AR-200G',
+    barcode: generateEan13Barcode(9205),
+    category: 'roasted_beans',
+    sub_category: 'Hạt rang 200g',
+    name_vi: 'Cà Phê Hạt Arabica túi 200 G',
+    name_en: 'Roasted Arabica Whole Beans 200g Pouch',
+    subtitle_vi: 'Túi 200g · 100% Hạt Arabica nguyên chất rang vừa, giữ trọn hương hoa quả',
+    subtitle_en: '200g Pouch · 100% Pure Highland Arabica whole beans, medium roast',
+    description_vi:
+      'Cà Phê Hạt Arabica túi 200g tiện lợi cho người thích tự xay tươi mỗi sáng tại nhà bằng cối xay tay hoặc máy pha tự động, mang hương hoa nhài, cam chín và hậu vị thanh sạch.',
+    description_en:
+      'Convenient 200g whole-bean Arabica pouch crafted for fresh home grinding, unlocking jasmine aromatics, gentle citrus brightness, and sweet honeyed clarity.',
+    coffee_type: '200g Whole Bean',
+    blend_summary_vi: '100% Hạt rang Arabica Cầu Đất nguyên chất',
+    blend_summary_en: '100% Pure Cầu Đất Highland Arabica whole beans',
+    roast_profile_vi: 'Rang Vừa (Medium Roast)',
+    roast_profile_en: 'Medium Roast',
+    tasting_notes_vi: 'Hoa nhài · Cam chín · Mật ong · Vị chua thanh tinh tế',
+    tasting_notes_en: 'Jasmine blossom · Ripe orange · Honey · Clean acidity',
+    brewing_methods: ['Pour-over', 'Espresso', 'Cold Brew', 'French Press'],
+    variant_label: 'Túi 200g (Hạt nguyên chất)',
+    unit_pack_label: 'Gói / Túi 200g',
+    price_vnd: 119000,
+    inventory: 180,
+    moq: '1 gói',
+    mascot_slug: 'fox',
+    screen_size: 'S18 Selected',
+    processing_method: 'CBU Washed',
+    origin_region: 'Cầu Đất – Lâm Đồng',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 4.5% (Hạt rang)',
+    grading_spec: 'Túi 200g nguyên hạt giữ hương tươi mới',
+    image_key: '/assets/roasted-beans/arabica-s18.jpg',
+    featured: 1,
+  },
+  {
+    slug: 'ca-phe-hat-robusta-200g',
+    sku: 'RC-HAT-RO-200G',
+    barcode: generateEan13Barcode(9206),
+    category: 'roasted_beans',
+    sub_category: 'Hạt rang 200g',
+    name_vi: 'Cà Phê Hạt Robusta túi 200 G',
+    name_en: 'Roasted Robusta Whole Beans 200g Pouch',
+    subtitle_vi: 'Túi 200g · 100% Hạt Robusta Tây Nguyên rang mộc, body dày crema đậm',
+    subtitle_en: '200g Pouch · 100% Pure Highland Robusta whole beans, rich crema',
+    description_vi:
+      'Cà Phê Hạt Robusta túi 200g mang nguồn năng lượng đậm đà từ vùng bazan Đắk Lắk. Phù hợp tự xay pha Phin hoặc phối cùng Arabica theo tỷ lệ gu riêng tại nhà.',
+    description_en:
+      'Pure highland Robusta whole beans in a compact 200g pouch delivering heavy cocoa body, sturdy crema, and bold morning energy for custom home grinding.',
+    coffee_type: '200g Whole Bean',
+    blend_summary_vi: '100% Hạt rang Robusta Đắk Lắk nguyên chất',
+    blend_summary_en: '100% Pure Đắk Lắk Robusta whole beans',
+    roast_profile_vi: 'Rang Vừa-Đậm (Medium-Dark Roast)',
+    roast_profile_en: 'Medium-Dark Roast',
+    tasting_notes_vi: 'Sô-cô-la đen · Hạt dẻ rang · Đậm caffeine · Crema dày',
+    tasting_notes_en: 'Dark chocolate · Roasted nut · Bold caffeine · Dense crema',
+    brewing_methods: ['Vietnamese Phin', 'Espresso', 'Moka Pot'],
+    variant_label: 'Túi 200g (Hạt nguyên chất)',
+    unit_pack_label: 'Gói / Túi 200g',
+    price_vnd: 109000,
+    inventory: 200,
+    moq: '1 gói',
+    mascot_slug: 'tiger',
+    screen_size: 'S18 Selected',
+    processing_method: 'Natural',
+    origin_region: 'Đắk Lắk – Tây Nguyên',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 4.5% (Hạt rang)',
+    grading_spec: 'Túi 200g nguyên hạt không tẩm ướp',
+    image_key: '/assets/roasted-beans/robusta-s18.jpg',
+    featured: 0,
+  },
+  {
+    slug: 'ca-phe-hat-culi-200g',
+    sku: 'RC-HAT-CU-200G',
+    barcode: generateEan13Barcode(9207),
+    category: 'roasted_beans',
+    sub_category: 'Hạt rang 200g',
+    name_vi: 'Cà Phê Hạt Culi gói 200 G',
+    name_en: 'Roasted Culi Peaberry Beans 200g Pack',
+    subtitle_vi: 'Gói 200g · Hạt đơn tròn tuyển chọn, vị đậm sâu và hàm lượng tinh dầu cao',
+    subtitle_en: '200g Pack · Single-bean Peaberry whole beans with intense syrupy finish',
+    description_vi:
+      'Cà Phê Hạt Culi gói 200g tuyển lọc những hạt cà phê đơn nhân tròn (Peaberry) có độ sánh đậm và hậu vị ca cao trầm sâu hơn hạt dẹt thông thường.',
+    description_en:
+      'Carefully sorted single-seed Peaberry (Culi) whole beans in a 200g pack, prized for syrupy concentration, dark cocoa depth, and bold caffeine lift.',
+    coffee_type: '200g Whole Bean',
+    blend_summary_vi: '100% Hạt rang Culi Peaberry tuyển chọn',
+    blend_summary_en: '100% Selected Culi Peaberry whole roasted beans',
+    roast_profile_vi: 'Rang Đậm Chuẩn Mực (Full City)',
+    roast_profile_en: 'Full City Roast',
+    tasting_notes_vi: 'Ca cao đắng · Gỗ tuyết tùng · Hậu ngọt sâu · Sánh đậm',
+    tasting_notes_en: 'Bitter cocoa · Cedar · Lingering sweet finish · Syrupy body',
+    brewing_methods: ['Vietnamese Phin', 'Espresso', 'Iced Milk Coffee'],
+    variant_label: 'Gói 200g (Hạt Culi nguyên chất)',
+    unit_pack_label: 'Gói 200g',
+    price_vnd: 99000,
+    inventory: 190,
+    moq: '1 gói',
+    mascot_slug: 'black-panther',
+    screen_size: 'S18 Peaberry',
+    processing_method: 'Natural',
+    origin_region: 'Đắk Lắk & Đắk Nông',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 4.5% (Hạt rang)',
+    grading_spec: 'Gói 200g hạt tròn Culi tuyển chọn',
+    image_key: '/assets/roasted-beans/culi-s18.jpg',
+    featured: 0,
+  },
+  {
+    slug: 'ca-phe-hoa-tan-3in1-hop-10-goi',
+    sku: 'RC-HT-3IN1-10X17G',
+    barcode: generateEan13Barcode(9208),
+    category: 'instant',
+    sub_category: 'Hòa tan 3in1',
+    name_vi: 'Cà Phê Hoà Tan 3in1 hộp 10 gói x 17 G',
+    name_en: '3in1 Instant Coffee (Box 10 Sticks x 17g)',
+    subtitle_vi: 'Hộp 10 gói × 17g · Hòa tan tiện lợi, béo dịu hài hòa pha nóng hoặc đá trong 10 giây',
+    subtitle_en: 'Box 10 × 17g · Smooth balanced 3in1 soluble blend for hot or iced cups',
+    description_vi:
+      'Cà Phê Hoà Tan 3in1 hộp 10 gói × 17g kết hợp tinh chất cà phê rang xay cùng kem sữa và đường theo tỷ lệ cân đối, mang lại ly cà phê sữa thơm ngậy chuẩn vị Việt mọi lúc mọi nơi.',
+    description_en:
+      'Box of 10 × 17g 3in1 Instant Coffee sticks uniting roasted soluble coffee extract, silky creamer, and balanced sweetness for instant hot or iced satisfaction.',
+    coffee_type: '3in1 Instant Coffee',
+    blend_summary_vi: 'Cà phê hòa tan 3in1 tỷ lệ hài hòa 17g/gói',
+    blend_summary_en: 'Balanced 3in1 instant formulation (17g per stick)',
+    roast_profile_vi: 'Chiết xuất Hòa tan 3in1',
+    roast_profile_en: 'Soluble 3in1 Extraction',
+    tasting_notes_vi: 'Thơm cà phê · Béo sữa dịu · Ngọt thanh vừa vặn',
+    tasting_notes_en: 'Roasted aroma · Smooth creaminess · Balanced sweetness',
+    brewing_methods: ['Hot Water (70–80°C)', 'Iced Coffee'],
+    variant_label: 'Hộp 10 gói × 17g',
+    unit_pack_label: 'Hộp 10 gói × 17g',
+    price_vnd: 59000,
+    inventory: 240,
+    moq: '1 hộp',
+    mascot_slug: 'fox',
+    screen_size: 'N/A',
+    processing_method: 'Soluble 3in1',
+    origin_region: 'Việt Nam',
+    harvest_year: 'Sản xuất mới nhất',
+    moisture_content: '≤ 4.0%',
+    grading_spec: 'Hộp 10 gói × 17g (Khối lượng tịnh 170g)',
+    image_key: 'instant_3in1_box_chill',
+    featured: 1,
+  },
+  {
+    slug: 'ca-phe-hoa-tan-3in1-tui-45-goi',
+    sku: 'RC-HT-3IN1-45X17G',
+    barcode: generateEan13Barcode(9209),
+    category: 'instant',
+    sub_category: 'Hòa tan 3in1',
+    name_vi: 'Cà Phê Hoà Tan 3in1 túi 45 gói x 17 G',
+    name_en: '3in1 Instant Coffee Family Pouch (45 Sticks x 17g)',
+    subtitle_vi: 'Túi lớn 45 gói × 17g · Tiết kiệm vượt trội cho gia đình và pantry văn phòng',
+    subtitle_en: '45 × 17g Economy Pouch · Value pack for households and office pantries',
+    description_vi:
+      'Túi tiết kiệm 45 gói Cà Phê Hoà Tan 3in1 (45 × 17g) giúp duy trì thói quen thưởng thức cà phê sữa nhanh gọn mỗi ngày tại nhà, công ty và quầy pantry với mức giá tối ưu.',
+    description_en:
+      'Family & office value pack of 45 × 17g 3in1 Instant Coffee sticks, keeping rich, creamy Vietnamese coffee ready in seconds at significant per-cup savings.',
+    coffee_type: '3in1 Instant Coffee',
+    blend_summary_vi: 'Túi lớn 45 gói Cà phê hòa tan 3in1 (765g)',
+    blend_summary_en: 'Large 45-stick 3in1 instant coffee pack (765g net)',
+    roast_profile_vi: 'Chiết xuất Hòa tan 3in1',
+    roast_profile_en: 'Soluble 3in1 Extraction',
+    tasting_notes_vi: 'Đậm hương cà phê · Sữa béo hài hòa · Pha nóng/đá đều ngon',
+    tasting_notes_en: 'Fragrant roast · Velvety milk balance · Great hot or iced',
+    brewing_methods: ['Hot Water (70–80°C)', 'Iced Coffee'],
+    variant_label: 'Túi 45 gói × 17g',
+    unit_pack_label: 'Túi 45 gói × 17g',
+    price_vnd: 239000,
+    inventory: 150,
+    moq: '1 túi',
+    mascot_slug: 'lion',
+    screen_size: 'N/A',
+    processing_method: 'Soluble 3in1',
+    origin_region: 'Việt Nam',
+    harvest_year: 'Sản xuất mới nhất',
+    moisture_content: '≤ 4.0%',
+    grading_spec: 'Túi 45 gói × 17g (Khối lượng tịnh 765g)',
+    image_key: 'instant_3in1_pouch_45_chill',
+    featured: 1,
+  },
+  {
+    slug: 'ca-phe-muoi-hop-10-goi',
+    sku: 'RC-HT-MUOI-10X18G',
+    barcode: generateEan13Barcode(9210),
+    category: 'instant',
+    sub_category: 'Cà phê Muối',
+    name_vi: 'Cà Phê Muối hộp 10 gói x 18 G',
+    name_en: 'Vietnamese Salted Instant Coffee (Box 10 Sticks x 18g)',
+    subtitle_vi: 'Hộp 10 gói × 18g · Vị kem béo mằn mặn đặc trưng hòa quyện cà phê rang đậm',
+    subtitle_en: 'Box 10 × 18g · Signature salted cream harmony over rich roasted coffee',
+    description_vi:
+      'Cà Phê Muối hộp 10 gói × 18g tái hiện hương vị cà phê muối trứ danh với lớp kem béo mằn mặn tinh tế giúp tôn bật vị ngọt hậu và giảm gắt đắng ngay trong 1 bước pha nhanh.',
+    description_en:
+      'Inspired by Hue’s iconic salted coffee, each 18g stick blends rich soluble roast with delicate savory sea-salt creaminess that amplifies sweetness and silkiness.',
+    coffee_type: 'Salted Coffee',
+    blend_summary_vi: 'Cà phê muối hòa tan chuẩn vị béo mặn hài hòa (18g/gói)',
+    blend_summary_en: 'Salted coffee instant formulation (18g per stick)',
+    roast_profile_vi: 'Hòa tan Phối Kem Muối',
+    roast_profile_en: 'Salted Cream Soluble Blend',
+    tasting_notes_vi: 'Mặn dịu đầu lưỡi · Béo kem mịn · Cà phê đậm ngọt hậu',
+    tasting_notes_en: 'Subtle sea-salt lift · Silky cream · Rich sweet coffee finish',
+    brewing_methods: ['Hot Water (70–80°C)', 'Iced Coffee'],
+    variant_label: 'Hộp 10 gói × 18g',
+    unit_pack_label: 'Hộp 10 gói × 18g',
+    price_vnd: 59000,
+    inventory: 220,
+    moq: '1 hộp',
+    mascot_slug: 'owl',
+    screen_size: 'N/A',
+    processing_method: 'Soluble Salted Cream',
+    origin_region: 'Việt Nam',
+    harvest_year: 'Sản xuất mới nhất',
+    moisture_content: '≤ 4.0%',
+    grading_spec: 'Hộp 10 gói × 18g (Khối lượng tịnh 180g)',
+    image_key: 'instant_salted_coffee_chill',
+    featured: 1,
+  },
+  {
+    slug: 'tieu-den-xay-45g',
+    sku: 'RC-TIEU-DX-45G',
+    barcode: generateEan13Barcode(9211),
+    category: 'pepper',
+    sub_category: 'Tiêu Đen Xay',
+    name_vi: 'Tiêu Đen Xay 45 G',
+    name_en: 'Highland Ground Black Pepper 45g Jar',
+    subtitle_vi: 'Hũ 45g · Tiêu đen Tây Nguyên xay mịn nguyên chất 100%, cay thơm nồng ấm',
+    subtitle_en: '45g Jar · 100% pure Central Highlands ground black pepper',
+    description_vi:
+      'Tiêu Đen Xay 45g được chế biến từ những chùm hạt tiêu đen chín chọn lọc vùng đất đỏ bazan Tây Nguyên, làm sạch và xay mịn đóng hũ tiện dụng, giữ trọn tinh dầu cay thơm tự nhiên cho gian bếp gia đình.',
+    description_en:
+      '100% pure ground black pepper harvested from Central Highlands basalt farms, milled fine and sealed in a 45g pantry jar to lock in warm pungency and vibrant aroma.',
+    coffee_type: 'Ground Black Pepper',
+    blend_summary_vi: '100% Tiêu đen Tây Nguyên nguyên chất không pha tạp',
+    blend_summary_en: '100% Pure Highland Black Pepper · No fillers',
+    roast_profile_vi: 'Phơi sạch & Xay mịn',
+    roast_profile_en: 'Sun-dried & Finely Ground',
+    tasting_notes_vi: 'Cay ấm đặc trưng · Tinh dầu thơm nồng · Sạch tạp chất',
+    tasting_notes_en: 'Warm piperine heat · Fragrant essential oils · Clean milled',
+    brewing_methods: [],
+    variant_label: 'Hũ 45g',
+    unit_pack_label: 'Hũ 45g',
+    price_vnd: 29000,
+    inventory: 300,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Xay mịn',
+    processing_method: 'Clean Sun-Dried & Milled',
+    origin_region: 'Đắk Lắk & Gia Lai',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ nắp vặn kín hương 45g',
+    image_key: 'pepper_ground_black_jar',
+    featured: 0,
+  },
+  {
+    slug: 'tieu-den-xay-90g',
+    sku: 'RC-TIEU-DX-90G',
+    barcode: generateEan13Barcode(9212),
+    category: 'pepper',
+    sub_category: 'Tiêu Đen Xay',
+    name_vi: 'Tiêu Đen Xay 90 G',
+    name_en: 'Highland Ground Black Pepper 90g Jar',
+    subtitle_vi: 'Hũ lớn 90g · Tiêu đen xay mịn nguyên chất cho bếp ăn và nhà hàng',
+    subtitle_en: '90g Jar · Value kitchen jar of pure Highland ground black pepper',
+    description_vi:
+      'Tiêu Đen Xay hũ 90g gấp đôi dung tích tiện lợi cho nhu cầu nêm nếm, tẩm ướp hằng ngày của gia đình và bếp chuyên nghiệp. 100% hạt tiêu sạch Tây Nguyên giàu hương vị tự nhiên.',
+    description_en:
+      'Double-size 90g jar of 100% pure Central Highlands ground black pepper tailored for daily family cooking, marinades, and culinary kitchens.',
+    coffee_type: 'Ground Black Pepper',
+    blend_summary_vi: '100% Tiêu đen Tây Nguyên nguyên chất hũ lớn 90g',
+    blend_summary_en: '100% Pure Highland Black Pepper (90g jar)',
+    roast_profile_vi: 'Phơi sạch & Xay mịn',
+    roast_profile_en: 'Sun-dried & Finely Ground',
+    tasting_notes_vi: 'Cay nồng tự nhiên · Dậy mùi món ướp · Hạt sạch đồng nhất',
+    tasting_notes_en: 'Natural pungency · Bold marinade aroma · Clean uniform grind',
+    brewing_methods: [],
+    variant_label: 'Hũ 90g',
+    unit_pack_label: 'Hũ 90g',
+    price_vnd: 58000,
+    inventory: 240,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Xay mịn',
+    processing_method: 'Clean Sun-Dried & Milled',
+    origin_region: 'Đắk Lắk & Gia Lai',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ lớn 90g nắp kín bảo quản lâu dài',
+    image_key: 'pepper_ground_black_jar',
+    featured: 0,
+  },
+  {
+    slug: 'tieu-den-so-45g',
+    sku: 'RC-TIEU-SO-45G',
+    barcode: generateEan13Barcode(9213),
+    category: 'pepper',
+    sub_category: 'Tiêu Sọ',
+    name_vi: 'Tiêu Đen Sọ 45 G',
+    name_en: 'Highland White / Hulled Black Pepper 45g Jar',
+    subtitle_vi: 'Hũ 45g · Tiêu sọ bỏ vỏ chọn lọc từ hạt chín đỏ, thơm thanh tinh khiết',
+    subtitle_en: '45g Jar · Selected hulled pepper with refined aroma and clean heat',
+    description_vi:
+      'Tiêu Đen Sọ 45g được làm từ hạt tiêu chín mọng đã loại bỏ lớp vỏ lụa bên ngoài, cho sắc màu sáng đẹp cùng vị cay thanh sâu, ít chát vỏ, hoàn hảo cho súp, đồ hấp và sốt kem.',
+    description_en:
+      'Crafted from fully ripe berries with outer skins gently removed, this 45g hulled pepper jar delivers refined warmth and luminous appearance for broths and delicate sauces.',
+    coffee_type: 'White / Hulled Pepper',
+    blend_summary_vi: '100% Tiêu sọ tuyển chọn sạch vỏ',
+    blend_summary_en: '100% Selected Hulled Peppercorns',
+    roast_profile_vi: 'Tách vỏ sạch & Sấy tự nhiên',
+    roast_profile_en: 'Hulled & Naturally Dried',
+    tasting_notes_vi: 'Thơm thanh · Cay dịu sâu · Màu sáng đẹp không làm sẫm món ăn',
+    tasting_notes_en: 'Refined aroma · Clean gentle heat · Bright culinary finish',
+    brewing_methods: [],
+    variant_label: 'Hũ 45g',
+    unit_pack_label: 'Hũ 45g',
+    price_vnd: 35000,
+    inventory: 220,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Hạt sọ tuyển chọn',
+    processing_method: 'Water-Retted & Hulled',
+    origin_region: 'Tây Nguyên Việt Nam',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ 45g tiêu sọ sạch cao cấp',
+    image_key: 'pepper_hulled_white_jar',
+    featured: 0,
+  },
+  {
+    slug: 'tieu-den-so-90g',
+    sku: 'RC-TIEU-SO-90G',
+    barcode: generateEan13Barcode(9214),
+    category: 'pepper',
+    sub_category: 'Tiêu Sọ',
+    name_vi: 'Tiêu Đen Sọ 90 G',
+    name_en: 'Highland White / Hulled Black Pepper 90g Jar',
+    subtitle_vi: 'Hũ lớn 90g · Tiêu sọ tinh khiết dịu hương cho gian bếp và đầu bếp',
+    subtitle_en: '90g Jar · Large culinary jar of selected hulled white pepper',
+    description_vi:
+      'Tiêu Đen Sọ hũ 90g dành cho người yêu sự tinh tế trong chế biến món Á – Âu: không chỉ dậy mùi thơm thanh khiết mà còn giữ trọn sắc trắng đẹp mắt cho nước dùng và nước chấm.',
+    description_en:
+      'Generous 90g jar of cleanly hulled highland pepper built for chefs and home cooks seeking delicate spice warmth without darkening light broths or cream sauces.',
+    coffee_type: 'White / Hulled Pepper',
+    blend_summary_vi: '100% Tiêu sọ tuyển chọn hũ 90g',
+    blend_summary_en: '100% Selected Hulled Peppercorns (90g jar)',
+    roast_profile_vi: 'Tách vỏ sạch & Sấy tự nhiên',
+    roast_profile_en: 'Hulled & Naturally Dried',
+    tasting_notes_vi: 'Thơm dịu tinh tế · Cay ấm kéo dài · Sạch sẽ an toàn',
+    tasting_notes_en: 'Delicate fragrance · Smooth warm finish · Pure single-origin',
+    brewing_methods: [],
+    variant_label: 'Hũ 90g',
+    unit_pack_label: 'Hũ 90g',
+    price_vnd: 69000,
+    inventory: 190,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Hạt sọ tuyển chọn',
+    processing_method: 'Water-Retted & Hulled',
+    origin_region: 'Tây Nguyên Việt Nam',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ 90g nắp kín giữ hương tiêu sọ',
+    image_key: 'pepper_hulled_white_jar',
+    featured: 0,
+  },
+  {
+    slug: 'tieu-den-hat-coi-xay-70g',
+    sku: 'RC-TIEU-DCX-70G',
+    barcode: generateEan13Barcode(9215),
+    category: 'pepper',
+    sub_category: 'Tiêu Cối Xay',
+    name_vi: 'Tiêu Đen Hạt Cối Xay 70 G',
+    name_en: 'Whole Black Peppercorns Grinder Jar 70g',
+    subtitle_vi: 'Hũ Cối Xay 70g · Hạt tiêu đen mẩy sàng lớn kèm nắp cối xay tươi trực tiếp tại bàn',
+    subtitle_en: '70g Grinder Jar · Bold whole black peppercorns with built-in fresh mill',
+    description_vi:
+      'Tiêu Đen Hạt Cối Xay 70g kết hợp những hạt tiêu đen Tây Nguyên chắc mẩy cùng hũ thủy tinh nắp cối xay bền bỉ — giúp bạn xoay và rắc tiêu tươi trực tiếp lên bít tết, salad hay phở để giữ 100% tinh dầu vừa giải phóng.',
+    description_en:
+      'Bold sun-dried highland black peppercorns packed inside a glass grinder jar so every twist releases freshly cracked essential oils directly onto steaks, grilled meats, and soups.',
+    coffee_type: 'Black Peppercorns Grinder',
+    blend_summary_vi: '100% Hạt tiêu đen mẩy nguyên hạt + Cối xay thủy tinh 70g',
+    blend_summary_en: '100% Bold whole black peppercorns with glass grinder mill (70g)',
+    roast_profile_vi: 'Nguyên hạt sàng lớn Sạch 100%',
+    roast_profile_en: 'Whole Graded Black Peppercorns',
+    tasting_notes_vi: 'Thơm bùng nổ khi xay tươi · Cay nồng đậm đà · Tiện dụng tại bàn',
+    tasting_notes_en: 'Freshly cracked aroma burst · Robust heat · Table-ready grinder',
+    brewing_methods: [],
+    variant_label: 'Hũ Cối Xay 70g',
+    unit_pack_label: 'Hũ Cối Xay 70g',
+    price_vnd: 79000,
+    inventory: 170,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Hạt mẩy ≥ 4.5mm',
+    processing_method: 'Sun-Dried Whole Graded',
+    origin_region: 'Đắk Lắk & Gia Lai',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ thủy tinh kèm đầu cối xay 70g',
+    image_key: 'pepper_black_grinder_jar',
+    featured: 1,
+  },
+  {
+    slug: 'tieu-so-hat-coi-xay-70g',
+    sku: 'RC-TIEU-SCX-70G',
+    barcode: generateEan13Barcode(9216),
+    category: 'pepper',
+    sub_category: 'Tiêu Cối Xay',
+    name_vi: 'Tiêu Sọ Hạt Cối Xay 70 G',
+    name_en: 'Whole White Peppercorns Grinder Jar 70g',
+    subtitle_vi: 'Hũ Cối Xay 70g · Tiêu sọ nguyên hạt cao cấp kèm đầu xay tươi chuẩn bàn ăn',
+    subtitle_en: '70g Grinder Jar · Whole white peppercorns with built-in precision mill',
+    description_vi:
+      'Tiêu Sọ Hạt Cối Xay 70g tuyển chọn những hạt tiêu sọ tròn đều đẹp mắt từ quả chín đỏ Tây Nguyên, đóng trong hũ thủy tinh nắp cối xay cao cấp để mang lại trải nghiệm nêm nếm tinh tế chuẩn nhà hàng.',
+    description_en:
+      'Premium whole white peppercorns inside an integrated glass grinder mill—cracking fresh, aromatic warmth at the table without discoloring delicate dishes.',
+    coffee_type: 'White Peppercorns Grinder',
+    blend_summary_vi: '100% Tiêu sọ nguyên hạt chọn lọc + Cối xay thủy tinh 70g',
+    blend_summary_en: '100% Whole white peppercorns with glass grinder mill (70g)',
+    roast_profile_vi: 'Nguyên hạt Tiêu sọ chọn lọc',
+    roast_profile_en: 'Whole Graded White Peppercorns',
+    tasting_notes_vi: 'Hương thơm thanh tao · Cay ấm sâu · Xay trực tiếp không mất mùi',
+    tasting_notes_en: 'Clean floral spice · Warm finish · Fresh table-cracked mill',
+    brewing_methods: [],
+    variant_label: 'Hũ Cối Xay 70g',
+    unit_pack_label: 'Hũ Cối Xay 70g',
+    price_vnd: 89000,
+    inventory: 160,
+    moq: '1 hũ',
+    mascot_slug: '',
+    screen_size: 'Hạt sọ tròn chọn lọc',
+    processing_method: 'Water-Retted & Hulled Whole',
+    origin_region: 'Tây Nguyên Việt Nam',
+    harvest_year: 'Vụ mùa mới nhất',
+    moisture_content: '≤ 12.0%',
+    grading_spec: 'Hũ thủy tinh kèm đầu cối xay 70g',
+    image_key: 'pepper_white_grinder_jar',
     featured: 1,
   },
 ];

@@ -19,6 +19,8 @@ export interface RoarCmsSnapshot {
     loyalty_settings: any[];
     site_settings: Array<{ key: string; value: string }>;
     media_assets: any[];
+    game_configs?: any[];
+    game_rewards?: any[];
   };
 }
 
@@ -42,6 +44,8 @@ export function buildCmsSnapshot(db: Database.Database): RoarCmsSnapshot {
         value: string;
       }>,
       media_assets: db.prepare('SELECT * FROM media_assets ORDER BY id ASC').all(),
+      game_configs: db.prepare('SELECT * FROM game_configs ORDER BY game_key ASC').all(),
+      game_rewards: db.prepare('SELECT * FROM game_rewards ORDER BY game_key ASC, slot_order ASC, id ASC').all(),
     },
   };
 }
@@ -111,7 +115,9 @@ export function restoreFromSnapshot(db: Database.Database, options: { force?: bo
     countOf('coffee_origins') === 0 ||
     countOf('personalities') === 0 ||
     countOf('cms_pages') === 0 ||
-    countOf('journal_articles') === 0;
+    countOf('journal_articles') === 0 ||
+    countOf('game_configs') === 0 ||
+    countOf('game_rewards') === 0;
 
   if (!needsRestore) return false;
 
@@ -373,6 +379,104 @@ export function restoreFromSnapshot(db: Database.Database, options: { force?: bo
         upsertMedia.run(
           ma.filename, ma.url, ma.title || '', ma.alt_text || '', ma.mime_type || 'image/jpeg',
           ma.size_bytes || 0, ma.source_type || 'uploaded', ma.created_at || new Date().toISOString()
+        );
+      }
+    }
+
+    if (Array.isArray(t.game_configs) && t.game_configs.length > 0 && (force || countOf('game_configs') === 0)) {
+      const upsertGameCfg = db.prepare(`
+        INSERT INTO game_configs (
+          game_key, title_vi, title_en, subtitle_vi, subtitle_en,
+          daily_free_plays, extra_play_cost_points, min_score_to_win, active, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(game_key) DO UPDATE SET
+          title_vi = excluded.title_vi,
+          title_en = excluded.title_en,
+          subtitle_vi = excluded.subtitle_vi,
+          subtitle_en = excluded.subtitle_en,
+          daily_free_plays = excluded.daily_free_plays,
+          extra_play_cost_points = excluded.extra_play_cost_points,
+          min_score_to_win = excluded.min_score_to_win,
+          active = excluded.active,
+          updated_at = excluded.updated_at
+      `);
+      for (const gc of t.game_configs) {
+        upsertGameCfg.run(
+          gc.game_key,
+          gc.title_vi,
+          gc.title_en,
+          gc.subtitle_vi || '',
+          gc.subtitle_en || '',
+          gc.daily_free_plays ?? 1,
+          gc.extra_play_cost_points ?? 30,
+          gc.min_score_to_win ?? 0,
+          gc.active ?? 1,
+          gc.updated_at || new Date().toISOString()
+        );
+      }
+    }
+
+    if (Array.isArray(t.game_rewards) && t.game_rewards.length > 0 && (force || countOf('game_rewards') === 0)) {
+      const upsertGameRw = db.prepare(`
+        INSERT INTO game_rewards (
+          id, game_key, slot_order, label_vi, label_en, description_vi, description_en,
+          reward_type, reward_value, min_order_value, max_discount,
+          gift_product_id, gift_product_slug, gift_product_name_vi, gift_product_name_en, gift_product_variant, gift_image_key,
+          weight, stock_total, stock_remaining, color_hex, badge_vi, badge_en, active, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          game_key = excluded.game_key,
+          slot_order = excluded.slot_order,
+          label_vi = excluded.label_vi,
+          label_en = excluded.label_en,
+          description_vi = excluded.description_vi,
+          description_en = excluded.description_en,
+          reward_type = excluded.reward_type,
+          reward_value = excluded.reward_value,
+          min_order_value = excluded.min_order_value,
+          max_discount = excluded.max_discount,
+          gift_product_id = excluded.gift_product_id,
+          gift_product_slug = excluded.gift_product_slug,
+          gift_product_name_vi = excluded.gift_product_name_vi,
+          gift_product_name_en = excluded.gift_product_name_en,
+          gift_product_variant = excluded.gift_product_variant,
+          gift_image_key = excluded.gift_image_key,
+          weight = excluded.weight,
+          stock_total = excluded.stock_total,
+          stock_remaining = excluded.stock_remaining,
+          color_hex = excluded.color_hex,
+          badge_vi = excluded.badge_vi,
+          badge_en = excluded.badge_en,
+          active = excluded.active,
+          updated_at = excluded.updated_at
+      `);
+      for (const rw of t.game_rewards) {
+        upsertGameRw.run(
+          rw.id,
+          rw.game_key,
+          rw.slot_order ?? 1,
+          rw.label_vi,
+          rw.label_en,
+          rw.description_vi || '',
+          rw.description_en || '',
+          rw.reward_type,
+          rw.reward_value ?? 0,
+          rw.min_order_value ?? 0,
+          rw.max_discount ?? 0,
+          rw.gift_product_id ?? null,
+          rw.gift_product_slug || '',
+          rw.gift_product_name_vi || '',
+          rw.gift_product_name_en || '',
+          rw.gift_product_variant || '',
+          rw.gift_image_key || 'product_robusta_house',
+          rw.weight ?? 10,
+          rw.stock_total ?? -1,
+          rw.stock_remaining ?? -1,
+          rw.color_hex || '#00552B',
+          rw.badge_vi || '',
+          rw.badge_en || '',
+          rw.active ?? 1,
+          rw.updated_at || new Date().toISOString()
         );
       }
     }

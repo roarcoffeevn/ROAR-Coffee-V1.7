@@ -79,10 +79,12 @@ export const ProductDetailPage: React.FC = () => {
       product.category === 'green_bean'
         ? { labelVi: 'Cà phê Nhân xanh B2B', labelEn: 'Green Coffee Matrix', to: '/coffee/green-beans' }
         : product.category === 'roasted_beans'
-          ? { labelVi: 'Cà phê Hạt rang (kg)', labelEn: 'Roasted Coffee Beans', to: '/coffee/roasted-beans' }
+          ? { labelVi: 'Cà phê Hạt rang', labelEn: 'Roasted Coffee Beans', to: '/coffee/roasted-beans' }
           : product.category === 'instant'
             ? { labelVi: 'Cà phê Hòa tan', labelEn: 'Instant Coffee', to: '/coffee/instant' }
-            : { labelVi: 'Cà phê Rang xay', labelEn: 'Roasted Coffee', to: '/coffee/roasted' };
+            : product.category === 'pepper'
+              ? { labelVi: 'Tiêu Tây Nguyên', labelEn: 'Highland Pepper', to: '/coffee/pepper' }
+              : { labelVi: 'Cà phê Rang xay', labelEn: 'Roasted Coffee', to: '/coffee/roasted' };
     setCustomBreadcrumb([
       { labelVi: 'Cửa hàng', labelEn: 'Shop', to: '/shop' },
       catNode,
@@ -145,6 +147,23 @@ export const ProductDetailPage: React.FC = () => {
               ),
             },
           ]
+        : product.category === 'pepper'
+          ? [
+              {
+                q: t('Tiêu Đen và Tiêu Sọ Tây Nguyên có nguyên chất 100% không?', 'Are ROAR Central Highlands Black & White Peppers 100% pure?'),
+                a: t(
+                  'Cam kết 100% hạt tiêu thu hái chín chọn lọc từ Đắk Lắk – Gia Lai, không pha tạp, không phẩm màu, giữ trọn vị cay nồng và tinh dầu tự nhiên.',
+                  '100% pure selected peppercorns harvested from Dak Lak and Gia Lai with zero fillers or artificial colors, preserving natural piperine heat and aroma.'
+                ),
+              },
+              {
+                q: t('Hạn sử dụng và cách bảo quản hũ tiêu & cối xay 70g?', 'How should glass pepper jars and 70g grinders be stored?'),
+                a: t(
+                  'Đóng nắp kín ngay sau khi sử dụng, đặt ở nơi khô ráo, thoáng mát, tránh hơi ẩm trực tiếp từ bếp đun. Hạn sử dụng 24 tháng.',
+                  'Keep the lid tightly sealed in a cool, dry pantry away from cooking steam. Best aroma within 24 months.'
+                ),
+              },
+            ]
         : [
             {
               q: t('Nên chọn Cà phê Nguyên hạt (Whole Bean) hay Xay sẵn cho Phin / Espresso?', 'Should I choose Whole Bean or pre-ground for Phin / Espresso?'),
@@ -234,8 +253,7 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const hasVolumeTiers =
-    product.category === 'roasted_beans' ||
-    (Array.isArray(product.pricing_tiers) && product.pricing_tiers.length > 0);
+    Array.isArray(product.pricing_tiers) && product.pricing_tiers.length > 0;
   const activeTier = hasVolumeTiers ? resolveVolumeTier(product.pricing_tiers, quantity) : null;
 
   const activeVariant = product.variants[selectedVariantIdx] || {
@@ -295,7 +313,9 @@ export const ProductDetailPage: React.FC = () => {
             ? '/coffee/green-beans'
             : product.category === 'roasted_beans'
               ? '/coffee/roasted-beans'
-              : '/shop'
+              : product.category === 'pepper'
+                ? '/coffee/pepper'
+                : '/shop'
         )}
         className="inline-flex items-center gap-1.5 text-xs font-medium text-[#202020]/70 dark:text-[#F1EFEA]/70 hover:text-[#00552B] dark:hover:text-[#C6A667]"
       >
@@ -305,7 +325,9 @@ export const ProductDetailPage: React.FC = () => {
             ? t('Quay lại Ma trận Nhân xanh', 'Back to Green Coffee Matrix')
             : product.category === 'roasted_beans'
               ? t('Quay lại Cà phê Hạt rang', 'Back to Roasted Coffee Beans')
-              : t('Quay lại danh mục', 'Back to Shop')}
+              : product.category === 'pepper'
+                ? t('Quay lại Tiêu Tây Nguyên', 'Back to Highland Pepper')
+                : t('Quay lại danh mục', 'Back to Shop')}
         </span>
       </Link>
 
@@ -940,6 +962,23 @@ export const ProductDetailPage: React.FC = () => {
                   ),
                 },
               ]
+            : product.category === 'pepper'
+              ? [
+                  {
+                    q: t('Tiêu Đen và Tiêu Sọ Tây Nguyên có nguyên chất 100% không?', 'Are ROAR Central Highlands Black & White Peppers 100% pure?'),
+                    a: t(
+                      'Cam kết 100% hạt tiêu thu hái chín chọn lọc từ Đắk Lắk – Gia Lai, không pha tạp, không phẩm màu, giữ trọn vị cay nồng và tinh dầu tự nhiên.',
+                      '100% pure selected peppercorns harvested from Dak Lak and Gia Lai with zero fillers or artificial colors, preserving natural piperine heat and aroma.'
+                    ),
+                  },
+                  {
+                    q: t('Hạn sử dụng và cách bảo quản hũ tiêu & cối xay 70g?', 'How should glass pepper jars and 70g grinders be stored?'),
+                    a: t(
+                      'Đóng nắp kín ngay sau khi sử dụng, đặt ở nơi khô ráo, thoáng mát, tránh hơi ẩm trực tiếp từ bếp đun. Hạn sử dụng 24 tháng.',
+                      'Keep the lid tightly sealed in a cool, dry pantry away from cooking steam. Best aroma within 24 months.'
+                    ),
+                  },
+                ]
             : [
                 {
                   q: t('Nên chọn Cà phê Nguyên hạt (Whole Bean) hay Xay sẵn cho Phin / Espresso?', 'Should I choose Whole Bean or pre-ground for Phin / Espresso?'),

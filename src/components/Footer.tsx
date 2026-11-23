@@ -132,6 +132,11 @@ export const Footer: React.FC = () => {
               </Link>
             </li>
             <li>
+              <Link to={localePath('/coffee/pepper')} className="hover:text-white">
+                {t('Tiêu Tây Nguyên', 'Highland Pepper')}
+              </Link>
+            </li>
+            <li>
               <Link to={localePath('/coffee/gift-vouchers')} className="hover:text-white">
                 {t('Thẻ Quà Tặng Gift Voucher', 'ROAR Gift Vouchers')}
               </Link>
@@ -178,6 +183,11 @@ export const Footer: React.FC = () => {
             <li>
               <Link to={localePath('/journal')} className="hover:text-white">
                 {t('Tạp chí cà phê', 'Coffee Journal')}
+              </Link>
+            </li>
+            <li>
+              <Link to={localePath('/play')} className="hover:text-white text-[#C6A667] font-medium">
+                {t('ROAR Play & Win (Nhận Quà)', 'ROAR Play & Win (Gifts)')}
               </Link>
             </li>
           </ul>

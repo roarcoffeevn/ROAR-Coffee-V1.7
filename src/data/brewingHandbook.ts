@@ -819,7 +819,7 @@ export const BREWING_HANDBOOK_ARTICLES: BrewingHandbookArticle[] = [
     excerptEn:
       'Dissolve pure freeze-dried ROAR Instant in 50ml 85°C water—shake with ice or cold milk for velvety café texture in seconds.',
     readMinutes: 3,
-    coverImageKey: '/assets/instant/instant-gold.jpg',
+    coverImageKey: 'instant_gold_chill',
     spec: {
       dose: '1–2 gói tiêu chuẩn',
       water: '50–70ml (uống đá) · 120ml (uống nóng)',

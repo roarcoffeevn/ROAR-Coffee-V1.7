@@ -165,9 +165,9 @@ export const DailyCheckinGame: React.FC<{ onRewardClaimed?: () => void }> = ({ o
               <span className="font-mono text-xs font-extrabold text-[#00552B] dark:text-[#C6A667] tabular-nums">
                 +{s.points} {t('điểm', 'pts')}
               </span>
-              {s.day === 7 && (
-                <span className="text-[9px] font-semibold text-[#202020]/65 dark:text-[#F1EFEA]/65 leading-tight">
-                  + Voucher -15%
+              {(s.bonusVi || s.bonusEn) && (
+                <span className="text-[9px] font-semibold text-[#202020]/65 dark:text-[#F1EFEA]/65 leading-tight line-clamp-2">
+                  {lang === 'en' ? s.bonusEn || s.bonusVi : s.bonusVi || s.bonusEn}
                 </span>
               )}
             </button>

@@ -93,7 +93,7 @@ export const RecentlyViewedStrip: React.FC<{ excludeSlug?: string }> = ({ exclud
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
         {items.slice(0, 4).map((p) => {
           const range = getTierPriceRange(p.pricing_tiers);
-          const isKg = p.category === 'roasted_beans' || (p.pricing_tiers?.length || 0) > 0;
+          const isKg = (p.pricing_tiers?.length || 0) > 0;
           const firstVar = p.variants?.[0];
           return (
             <div

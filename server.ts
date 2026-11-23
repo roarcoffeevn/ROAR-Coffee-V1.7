@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
@@ -46,6 +47,11 @@ import {
   normalizeMembershipTierName,
   resolveEffectiveMembershipTier,
 } from './src/lib/membershipTiers.ts';
+import {
+  DEFAULT_CHECKIN_SCHEDULE,
+  type CheckinScheduleDay,
+  type GameKey,
+} from './src/lib/gamesCatalog.ts';
 
 initDatabase();
 
@@ -603,7 +609,14 @@ app.post('/api/ai/chat', async (req, res) => {
         { label: isEn ? 'B2B Partnership' : 'Đăng ký Đối tác B2B', to: '/partners' },
       ];
     } else if (q.includes('kg') || q.includes('sỉ') || q.includes('hạt rang') || q.includes('s18') || q.includes('báo giá') || q.includes('wholesale')) {
-      const beans = allProducts.filter((p) => p.category === 'roasted_beans');
+      const beans = allProducts.filter((p) => {
+        if (p.category !== 'roasted_beans') return false;
+        try {
+          return JSON.parse(p.pricing_tiers_json || '[]').length > 0;
+        } catch {
+          return false;
+        }
+      });
       matched = beans.filter((p) => {
         if (q.includes('arabica')) return p.name_vi.toLowerCase().includes('arabica');
         if (q.includes('culi')) return p.name_vi.toLowerCase().includes('culi');
@@ -1053,15 +1066,27 @@ app.post('/api/admin/wallet/requests/:id/reject', requirePermission('customers',
   res.json({ ok: true });
 });
 
-const CHECKIN_REWARD_SCHEDULE = [
-  { day: 1, points: 10, bonusVi: '', bonusEn: '' },
-  { day: 2, points: 15, bonusVi: '', bonusEn: '' },
-  { day: 3, points: 40, bonusVi: 'Bonus chuỗi 3 ngày liên tục!', bonusEn: '3-Day Streak Bonus!' },
-  { day: 4, points: 20, bonusVi: '', bonusEn: '' },
-  { day: 5, points: 25, bonusVi: '', bonusEn: '' },
-  { day: 6, points: 30, bonusVi: '', bonusEn: '' },
-  { day: 7, points: 100, bonusVi: 'Quà VIP 7 ngày: +100 điểm & Voucher ROAR7DAY (-15%)', bonusEn: '7-Day VIP Gift: +100 pts & Voucher ROAR7DAY (15% OFF)' },
-];
+function getCheckinRewardSchedule(): CheckinScheduleDay[] {
+  try {
+    const row = db.prepare("SELECT value FROM site_settings WHERE key = 'checkin_schedule_json'").get() as
+      | { value: string }
+      | undefined;
+    if (row?.value) {
+      const parsed = JSON.parse(row.value);
+      if (Array.isArray(parsed) && parsed.length === 7) {
+        return parsed.map((d: any, idx: number) => ({
+          day: Number(d.day || idx + 1),
+          points: Math.max(0, Math.round(Number(d.points ?? DEFAULT_CHECKIN_SCHEDULE[idx].points))),
+          bonusVi: String(d.bonusVi ?? ''),
+          bonusEn: String(d.bonusEn ?? ''),
+        }));
+      }
+    }
+  } catch {
+    // ignore malformed json
+  }
+  return DEFAULT_CHECKIN_SCHEDULE;
+}
 
 function getVietnamDateStr(offsetDays = 0): string {
   const now = new Date(Date.now() + offsetDays * 86400000);
@@ -1072,6 +1097,7 @@ app.get('/api/checkin/status', requireAuth, (req: AuthedRequest, res) => {
   const userId = req.authUser!.userId;
   const today = getVietnamDateStr(0);
   const yesterday = getVietnamDateStr(-1);
+  const schedule = getCheckinRewardSchedule();
   const rows = db
     .prepare('SELECT checkin_date, streak_day, points_awarded, bonus_reward FROM daily_checkins WHERE user_id = ? ORDER BY checkin_date DESC LIMIT 14')
     .all(userId) as any[];
@@ -1091,7 +1117,7 @@ app.get('/api/checkin/status', requireAuth, (req: AuthedRequest, res) => {
     currentStreak,
     nextCycleDay,
     totalCheckins,
-    schedule: CHECKIN_REWARD_SCHEDULE,
+    schedule,
     history: rows,
   });
 });
@@ -1100,6 +1126,7 @@ app.post('/api/checkin', requireAuth, (req: AuthedRequest, res) => {
   const userId = req.authUser!.userId;
   const today = getVietnamDateStr(0);
   const yesterday = getVietnamDateStr(-1);
+  const schedule = getCheckinRewardSchedule();
 
   const existing = db.prepare('SELECT id FROM daily_checkins WHERE user_id = ? AND checkin_date = ?').get(userId, today);
   if (existing) {
@@ -1110,7 +1137,7 @@ app.post('/api/checkin', requireAuth, (req: AuthedRequest, res) => {
   const prev = db.prepare('SELECT streak_day FROM daily_checkins WHERE user_id = ? AND checkin_date = ?').get(userId, yesterday) as any;
   const newStreak = prev ? Number(prev.streak_day || 0) + 1 : 1;
   const cycleDay = ((newStreak - 1) % 7) + 1;
-  const rule = CHECKIN_REWARD_SCHEDULE[cycleDay - 1] || CHECKIN_REWARD_SCHEDULE[0];
+  const rule = schedule[cycleDay - 1] || schedule[0];
 
   db.prepare(`
     INSERT INTO daily_checkins (user_id, checkin_date, streak_day, points_awarded, bonus_reward)
@@ -1303,7 +1330,7 @@ app.get('/api/account/dashboard', requireAuth, (req: AuthedRequest, res) => {
     ...o,
     items: db
       .prepare(
-        "SELECT oi.*, p.slug as product_slug, p.image_key as product_image_key, p.category as product_category, CASE WHEN p.category = 'roasted_beans' OR (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
+        "SELECT oi.*, p.slug as product_slug, p.image_key as product_image_key, p.category as product_category, CASE WHEN (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
       )
       .all(o.id),
     gift_dispatches: maskGiftDispatches(
@@ -1322,6 +1349,9 @@ app.get('/api/account/dashboard', requireAuth, (req: AuthedRequest, res) => {
   const unreadNotifications = (
     db.prepare('SELECT COUNT(*) as c FROM user_notifications WHERE user_id = ? AND is_read = 0').get(userId) as { c: number }
   ).c;
+  const gameClaims = db
+    .prepare('SELECT * FROM game_reward_claims WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 30')
+    .all(userId);
 
   res.json({
     user: {
@@ -1335,6 +1365,7 @@ app.get('/api/account/dashboard', requireAuth, (req: AuthedRequest, res) => {
     ledger,
     orders: ordersWithItems,
     activeVouchers,
+    gameClaims,
     tiers,
     loyaltySettings,
     notifications,
@@ -1608,6 +1639,53 @@ app.post('/api/promotions/validate', (req: AuthedRequest, res) => {
         terms_en: `Issued for ${giftDispatch.recipient_name}. Valid until ${String(giftDispatch.expires_at).slice(0, 10)}.`,
       },
       discountAmount,
+    });
+    return;
+  }
+
+  const gameClaim = db
+    .prepare("SELECT * FROM game_reward_claims WHERE UPPER(claim_code) = ? AND reward_type = 'product_gift'")
+    .get(normalizedCode) as any;
+
+  if (gameClaim) {
+    if (gameClaim.status === 'redeemed' || gameClaim.status === 'fulfilled') {
+      res.status(400).json({ error: 'Mã quà tặng Mini-Game này đã được sử dụng trong đơn hàng trước đó.' });
+      return;
+    }
+    if (gameClaim.status !== 'active' || new Date(gameClaim.expires_at).getTime() < Date.now()) {
+      res.status(400).json({ error: 'Mã quà tặng Mini-Game đã hết hạn hoặc bị hủy.' });
+      return;
+    }
+    if (!req.authUser || Number(gameClaim.user_id) !== Number(req.authUser.userId)) {
+      res.status(403).json({ error: 'Vui lòng đăng nhập đúng tài khoản thành viên đã trúng quà để áp dụng quà tặng này.' });
+      return;
+    }
+    const rwCfg = gameClaim.reward_id
+      ? (db.prepare('SELECT min_order_value FROM game_rewards WHERE id = ?').get(gameClaim.reward_id) as any)
+      : null;
+    const minOrder = Number(rwCfg?.min_order_value || 0);
+    if (minOrder > 0 && Number(subtotal || 0) < minOrder) {
+      res.status(400).json({ error: `Quà tặng áp dụng cho đơn từ ${minOrder.toLocaleString('vi-VN')} ₫ trở lên.` });
+      return;
+    }
+    res.json({
+      valid: true,
+      isGameGift: true,
+      promo: {
+        id: gameClaim.id,
+        code: gameClaim.claim_code,
+        discount_type: 'product_gift',
+        discount_value: 0,
+        title_vi: `Quà tặng Mini-Game: ${gameClaim.gift_product_name_vi || gameClaim.reward_label_vi}`,
+        title_en: `Mini-Game Gift: ${gameClaim.gift_product_name_en || gameClaim.reward_label_en}`,
+        gift_product_name_vi: gameClaim.gift_product_name_vi,
+        gift_product_name_en: gameClaim.gift_product_name_en,
+        gift_product_variant: gameClaim.gift_product_variant,
+        gift_image_key: gameClaim.gift_image_key,
+        terms_vi: `Gửi kèm miễn phí trong đơn hàng của bạn. HSD: ${String(gameClaim.expires_at).slice(0, 10)}.`,
+        terms_en: `Included free inside your order parcel. Expires: ${String(gameClaim.expires_at).slice(0, 10)}.`,
+      },
+      discountAmount: 0,
     });
     return;
   }
@@ -1920,6 +1998,8 @@ app.post('/api/orders', (req: AuthedRequest, res) => {
     let discountAmount = 0;
     let appliedVoucher = '';
     let redeemedGiftDispatchId: number | null = null;
+    let redeemedGameClaimId: number | null = null;
+    let redeemedGameGiftNote = '';
 
     if (voucherCode) {
       const normalizedCode = String(voucherCode).trim().toUpperCase();
@@ -1933,20 +2013,35 @@ app.post('/api/orders', (req: AuthedRequest, res) => {
         discountAmount = Math.min(subtotal, Number(giftDispatch.face_value_vnd || 0));
         redeemedGiftDispatchId = Number(giftDispatch.id);
       } else {
-        const promo = db
-          .prepare('SELECT * FROM promotions WHERE UPPER(code) = ? AND active = 1 AND start_date <= ? AND end_date >= ? AND used_count < usage_limit')
-          .get(normalizedCode, today, today) as any;
-        if (promo && subtotal >= promo.min_order_value && (!promo.member_only || req.authUser)) {
-          appliedVoucher = promo.code;
-          if (promo.discount_type === 'percent') {
-            discountAmount = Math.round((subtotal * promo.discount_value) / 100);
-            if (promo.max_discount > 0) discountAmount = Math.min(discountAmount, promo.max_discount);
-          } else if (promo.discount_type === 'fixed') {
-            discountAmount = Math.min(subtotal, promo.discount_value);
-          } else if (promo.discount_type === 'free_shipping') {
-            shippingFee = 0;
+        const gameGiftClaim = db
+          .prepare("SELECT * FROM game_reward_claims WHERE UPPER(claim_code) = ? AND reward_type = 'product_gift' AND status = 'active' AND expires_at >= datetime('now')")
+          .get(normalizedCode) as any;
+        if (gameGiftClaim && Number(gameGiftClaim.user_id) === Number(effectiveUserId)) {
+          const rwCfg = gameGiftClaim.reward_id
+            ? (db.prepare('SELECT min_order_value FROM game_rewards WHERE id = ?').get(gameGiftClaim.reward_id) as any)
+            : null;
+          const minOrder = Number(rwCfg?.min_order_value || 0);
+          if (subtotal >= minOrder) {
+            appliedVoucher = gameGiftClaim.claim_code;
+            redeemedGameClaimId = Number(gameGiftClaim.id);
+            redeemedGameGiftNote = `[Quà tặng Mini-Game kèm đơn: ${gameGiftClaim.gift_product_name_vi || gameGiftClaim.reward_label_vi}${gameGiftClaim.gift_product_variant ? ` (${gameGiftClaim.gift_product_variant})` : ''} · Mã ${gameGiftClaim.claim_code}]`;
           }
-          db.prepare('UPDATE promotions SET used_count = used_count + 1 WHERE id = ?').run(promo.id);
+        } else {
+          const promo = db
+            .prepare('SELECT * FROM promotions WHERE UPPER(code) = ? AND active = 1 AND start_date <= ? AND end_date >= ? AND used_count < usage_limit')
+            .get(normalizedCode, today, today) as any;
+          if (promo && subtotal >= promo.min_order_value && (!promo.member_only || req.authUser)) {
+            appliedVoucher = promo.code;
+            if (promo.discount_type === 'percent') {
+              discountAmount = Math.round((subtotal * promo.discount_value) / 100);
+              if (promo.max_discount > 0) discountAmount = Math.min(discountAmount, promo.max_discount);
+            } else if (promo.discount_type === 'fixed') {
+              discountAmount = Math.min(subtotal, promo.discount_value);
+            } else if (promo.discount_type === 'free_shipping') {
+              shippingFee = 0;
+            }
+            db.prepare('UPDATE promotions SET used_count = used_count + 1 WHERE id = ?').run(promo.id);
+          }
         }
       }
     }
@@ -2029,7 +2124,7 @@ app.post('/api/orders', (req: AuthedRequest, res) => {
         appliedVoucher,
         paymentMethod || 'cod',
         initialPaymentStatus,
-        String(notes || '').trim()
+        [String(notes || '').trim(), redeemedGameGiftNote].filter(Boolean).join(' ')
       );
 
     const orderId = Number(orderResult.lastInsertRowid);
@@ -2040,6 +2135,20 @@ app.post('/api/orders', (req: AuthedRequest, res) => {
       if (upd.changes !== 1) {
         throw new Error('Gift voucher was already redeemed');
       }
+    }
+    if (redeemedGameClaimId) {
+      const updClaim = db
+        .prepare("UPDATE game_reward_claims SET status = 'redeemed', redeemed_order_id = ?, redeemed_at = datetime('now') WHERE id = ? AND status = 'active'")
+        .run(orderId, redeemedGameClaimId);
+      if (updClaim.changes !== 1) {
+        throw new Error('Game gift reward was already redeemed');
+      }
+    } else if (appliedVoucher) {
+      db.prepare("UPDATE game_reward_claims SET status = 'redeemed', redeemed_order_id = ?, redeemed_at = datetime('now') WHERE UPPER(promo_code) = ? AND user_id = ? AND status = 'active'").run(
+        orderId,
+        appliedVoucher.toUpperCase(),
+        effectiveUserId
+      );
     }
     const insertItem = db.prepare(`
       INSERT INTO order_items (order_id, product_id, sku, product_name_vi, product_name_en, variant_label, quantity, unit_price_vnd, line_total_vnd)
@@ -2678,7 +2787,7 @@ app.get('/api/orders/track', (req, res) => {
     shipping_tracking: buildLiveShippingTracking(o),
     items: db
       .prepare(
-        "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN p.category = 'roasted_beans' OR (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
+        "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
       )
       .all(o.id),
     gift_dispatches: maskGiftDispatches(
@@ -2709,7 +2818,7 @@ app.get('/api/orders/shipping-status', (req, res) => {
 
   const items = db
     .prepare(
-      "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN p.category = 'roasted_beans' OR (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
+      "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
     )
     .all(order.id);
 
@@ -3161,7 +3270,7 @@ app.get('/api/admin/orders', requirePermission('orders'), (_req, res) => {
     ...o,
     items: db
       .prepare(
-        "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN p.category = 'roasted_beans' OR (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
+        "SELECT oi.*, p.image_key as product_image_key, p.slug as product_slug, p.category as product_category, CASE WHEN (p.pricing_tiers_json IS NOT NULL AND p.pricing_tiers_json != '[]' AND p.pricing_tiers_json != '') THEN 'kg' ELSE 'unit' END as unit FROM order_items oi LEFT JOIN products p ON oi.product_id = p.id WHERE oi.order_id = ?"
       )
       .all(o.id),
   }));
@@ -3523,6 +3632,776 @@ app.patch('/api/admin/promotions/:id', requirePermission('promotions'), (req: Au
   logAudit(req.authUser!.userId, req.authUser!.email, 'TOGGLE_PROMOTION', 'promotion', id, { active });
   scheduleSnapshotSync(db);
   res.json({ ok: true });
+});
+
+// ---------- INTERACTIVE GAMES & REWARD REPLACEMENT ENGINE ----------
+function generateGameClaimCode(prefix: string): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const makeSeg = (len: number) => {
+    const bytes = crypto.randomBytes(len);
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      out += alphabet[bytes[i] % alphabet.length];
+    }
+    return out;
+  };
+  for (let i = 0; i < 12; i++) {
+    const code = `${prefix}-${makeSeg(4)}-${makeSeg(4)}`;
+    const exists = db.prepare('SELECT id FROM game_reward_claims WHERE claim_code = ?').get(code);
+    if (!exists) return code;
+  }
+  return `${prefix}-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+}
+
+function generateGamePromoCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let i = 0; i < 12; i++) {
+    const bytes = crypto.randomBytes(6);
+    let seg = '';
+    for (let j = 0; j < 6; j++) seg += alphabet[bytes[j] % alphabet.length];
+    const code = `ROAR-GM-${seg}`;
+    const exists = db.prepare('SELECT id FROM promotions WHERE code = ?').get(code);
+    if (!exists) return code;
+  }
+  return `ROAR-GM-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+}
+
+function maskWinnerDisplayName(fullName: string): string {
+  const trimmed = String(fullName || '').trim();
+  if (!trimmed) return 'ROAR Member';
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return `${parts[0].slice(0, 2)}***`;
+  const last = parts[parts.length - 1];
+  return `${parts.slice(0, -1).join(' ')} ${last.slice(0, 1)}***`;
+}
+
+function pickWeightedGameReward(rewards: any[]): any {
+  const totalWeight = rewards.reduce((acc, r) => acc + Math.max(1, Number(r.weight || 1)), 0);
+  if (totalWeight <= 0) return rewards[0];
+  let roll = Math.random() * totalWeight;
+  for (const r of rewards) {
+    roll -= Math.max(1, Number(r.weight || 1));
+    if (roll <= 0) return r;
+  }
+  return rewards[rewards.length - 1];
+}
+
+app.get('/api/games', (req: AuthedRequest, res) => {
+  const configs = db
+    .prepare(
+      `SELECT * FROM game_configs
+       ORDER BY CASE game_key
+         WHEN 'wheel' THEN 1
+         WHEN 'shake' THEN 2
+         WHEN 'fortune' THEN 3
+         WHEN 'quiz' THEN 4
+         WHEN 'memory' THEN 5
+         WHEN 'harvest' THEN 6
+         WHEN 'mystery' THEN 7
+         ELSE 8
+       END`
+    )
+    .all() as any[];
+  const rewards = db
+    .prepare('SELECT * FROM game_rewards ORDER BY game_key ASC, slot_order ASC, id ASC')
+    .all() as any[];
+  const today = getVietnamDateStr(0);
+
+  const playsTodayByGame: Record<string, number> = {};
+  const remainingFreeToday: Record<string, number> = {};
+  let myClaims: any[] = [];
+  let userPoints = null;
+
+  if (req.authUser) {
+    const playRows = db
+      .prepare('SELECT game_key, COUNT(*) as cnt FROM game_plays WHERE user_id = ? AND play_date = ? GROUP BY game_key')
+      .all(req.authUser.userId, today) as Array<{ game_key: string; cnt: number }>;
+    for (const pr of playRows) {
+      playsTodayByGame[pr.game_key] = Number(pr.cnt || 0);
+    }
+    myClaims = db
+      .prepare('SELECT * FROM game_reward_claims WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 40')
+      .all(req.authUser.userId);
+    userPoints = getPointsSummary(req.authUser.userId);
+  }
+
+  for (const cfg of configs) {
+    const used = playsTodayByGame[cfg.game_key] || 0;
+    remainingFreeToday[cfg.game_key] = Math.max(0, Number(cfg.daily_free_plays || 0) - used);
+  }
+
+  const recentWinnersRaw = db
+    .prepare(
+      `SELECT c.id, c.game_key, c.reward_type, c.reward_label_vi, c.reward_label_en,
+              c.gift_product_name_vi, c.gift_product_name_en, c.created_at, u.full_name
+       FROM game_reward_claims c
+       LEFT JOIN users u ON u.id = c.user_id
+       ORDER BY c.id DESC
+       LIMIT 12`
+    )
+    .all() as any[];
+
+  const recentWinners = recentWinnersRaw.map((w) => ({
+    id: w.id,
+    game_key: w.game_key,
+    display_name: maskWinnerDisplayName(w.full_name),
+    reward_type: w.reward_type,
+    reward_label_vi: w.reward_label_vi,
+    reward_label_en: w.reward_label_en,
+    gift_product_name_vi: w.gift_product_name_vi,
+    gift_product_name_en: w.gift_product_name_en,
+    created_at: w.created_at,
+  }));
+
+  res.json({
+    configs,
+    rewards,
+    remainingFreeToday,
+    playsTodayByGame,
+    myClaims,
+    userPoints,
+    recentWinners,
+  });
+});
+
+app.post('/api/games/play', requireAuth, (req: AuthedRequest, res) => {
+  const userId = req.authUser!.userId;
+  const gameKey = String(req.body?.gameKey || '').trim() as GameKey;
+  const useExtraPoints = Boolean(req.body?.useExtraPoints);
+  const score = Math.max(0, Math.floor(Number(req.body?.score || 0)));
+  const validKeys: GameKey[] = ['wheel', 'quiz', 'memory', 'harvest', 'mystery', 'shake', 'fortune'];
+  if (!validKeys.includes(gameKey)) {
+    res.status(400).json({ error: 'Mini-game không hợp lệ.' });
+    return;
+  }
+
+  const cfg = db.prepare('SELECT * FROM game_configs WHERE game_key = ?').get(gameKey) as any;
+  if (!cfg || !cfg.active) {
+    res.status(400).json({ error: 'Mini-game này hiện đang tạm bảo trì.' });
+    return;
+  }
+
+  const today = getVietnamDateStr(0);
+
+  try {
+    const outcome = db.transaction(() => {
+      const playsRow = db
+        .prepare('SELECT COUNT(*) as cnt FROM game_plays WHERE user_id = ? AND game_key = ? AND play_date = ?')
+        .get(userId, gameKey, today) as { cnt: number };
+      const playsToday = Number(playsRow?.cnt || 0);
+      const freeRemaining = Math.max(0, Number(cfg.daily_free_plays || 0) - playsToday);
+
+      let usedPoints = 0;
+      if (freeRemaining <= 0) {
+        if (!useExtraPoints) {
+          throw Object.assign(new Error('Bạn đã hết lượt miễn phí hôm nay. Dùng điểm ROAR để chơi thêm lượt mới nhé!'), {
+            status: 400,
+            outOfFreePlays: true,
+          });
+        }
+        const cost = Math.max(1, Number(cfg.extra_play_cost_points || 20));
+        const ptsSummary = getPointsSummary(userId);
+        if (ptsSummary.available < cost) {
+          throw Object.assign(
+            new Error(`Cần ${cost} điểm ROAR để chơi thêm (bạn đang có ${ptsSummary.available} điểm).`),
+            { status: 400 }
+          );
+        }
+        usedPoints = cost;
+        db.prepare(`
+          INSERT INTO points_ledger (user_id, order_id, entry_type, points, description_vi, description_en)
+          VALUES (?, NULL, 'redeem', ?, ?, ?)
+        `).run(
+          userId,
+          -cost,
+          `Đổi ${cost} điểm chơi thêm ${cfg.title_vi}`,
+          `Spent ${cost} pts for extra play: ${cfg.title_en}`
+        );
+      }
+
+      if (gameKey === 'harvest' && score < Number(cfg.min_score_to_win || 0)) {
+        db.prepare(`
+          INSERT INTO game_plays (user_id, game_key, play_date, used_points, score, reward_id, claim_id)
+          VALUES (?, ?, ?, ?, ?, NULL, NULL)
+        `).run(userId, gameKey, today, usedPoints, score);
+        return {
+          won: false,
+          score,
+          minScoreRequired: Number(cfg.min_score_to_win || 0),
+          usedPoints,
+          reward: null,
+          claim: null,
+          promoCode: '',
+        };
+      }
+
+      const eligible = db
+        .prepare(
+          `SELECT * FROM game_rewards
+           WHERE game_key = ? AND active = 1 AND (stock_total < 0 OR stock_remaining > 0)
+           ORDER BY slot_order ASC, id ASC`
+        )
+        .all(gameKey) as any[];
+
+      if (eligible.length === 0) {
+        throw Object.assign(new Error('Kho phần thưởng của trò chơi này đang được cập nhật thêm. Vui lòng thử lại sau!'), {
+          status: 400,
+        });
+      }
+
+      const wonReward = pickWeightedGameReward(eligible);
+      if (Number(wonReward.stock_total) >= 0) {
+        const updStock = db
+          .prepare('UPDATE game_rewards SET stock_remaining = stock_remaining - 1 WHERE id = ? AND stock_remaining > 0')
+          .run(wonReward.id);
+        if (updStock.changes !== 1) {
+          throw Object.assign(new Error('Phần thưởng vừa hết suất, vui lòng thử quay lại!'), { status: 409 });
+        }
+      }
+
+      let promoCode = '';
+      let claimCode = '';
+      let claimStatus: 'active' | 'fulfilled' = 'active';
+      const expiryIso = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+      const endDateStr = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+      if (wonReward.reward_type === 'points') {
+        claimCode = generateGameClaimCode('PTS');
+        claimStatus = 'fulfilled';
+        db.prepare(`
+          INSERT INTO points_ledger (user_id, order_id, entry_type, points, description_vi, description_en, expires_at)
+          VALUES (?, NULL, 'earn_available', ?, ?, ?, datetime('now', '+365 days'))
+        `).run(
+          userId,
+          Number(wonReward.reward_value || 0),
+          `Thưởng Mini-Game (${cfg.title_vi}): ${wonReward.label_vi}`,
+          `Mini-Game Reward (${cfg.title_en}): ${wonReward.label_en}`
+        );
+        syncUserTierInDb(userId);
+      } else if (
+        wonReward.reward_type === 'voucher_percent' ||
+        wonReward.reward_type === 'voucher_fixed' ||
+        wonReward.reward_type === 'free_shipping'
+      ) {
+        promoCode = generateGamePromoCode();
+        claimCode = promoCode;
+        const discountType =
+          wonReward.reward_type === 'voucher_percent'
+            ? 'percent'
+            : wonReward.reward_type === 'voucher_fixed'
+              ? 'fixed'
+              : 'free_shipping';
+        db.prepare(`
+          INSERT INTO promotions (
+            code, title_vi, title_en, description_vi, description_en, promo_type, discount_type,
+            discount_value, max_discount, min_order_value, eligible_category, start_date, end_date,
+            usage_limit, used_count, per_customer_limit, combinable, member_only, min_tier, terms_vi, terms_en, active
+          ) VALUES (?, ?, ?, ?, ?, 'game_reward', ?, ?, ?, ?, 'all', ?, ?, 1, 0, 1, 0, 1, '', ?, ?, 1)
+        `).run(
+          promoCode,
+          `[Mini-Game] ${wonReward.label_vi}`,
+          `[Mini-Game] ${wonReward.label_en}`,
+          wonReward.description_vi || wonReward.label_vi,
+          wonReward.description_en || wonReward.label_en,
+          discountType,
+          Number(wonReward.reward_value || 0),
+          Number(wonReward.max_discount || 0),
+          Number(wonReward.min_order_value || 0),
+          today,
+          endDateStr,
+          `Mã thưởng cá nhân từ ${cfg.title_vi}. HSD tới ${endDateStr}.`,
+          `Personal reward code from ${cfg.title_en}. Valid until ${endDateStr}.`
+        );
+        createUserNotification(userId, {
+          titleVi: `Chúc mừng trúng thưởng ${wonReward.label_vi}!`,
+          titleEn: `You won ${wonReward.label_en}!`,
+          messageVi: `Mã ưu đãi ${promoCode} từ ${cfg.title_vi} đã được lưu vào tài khoản của bạn.`,
+          messageEn: `Voucher ${promoCode} from ${cfg.title_en} has been saved to your account.`,
+          category: 'promo',
+          linkUrl: '/checkout',
+        });
+      } else {
+        claimCode = generateGameClaimCode('GIFT-ROAR');
+        createUserNotification(userId, {
+          titleVi: `Trúng Quà Tặng Sản Phẩm: ${wonReward.gift_product_name_vi || wonReward.label_vi}`,
+          titleEn: `Won Product Gift: ${wonReward.gift_product_name_en || wonReward.label_en}`,
+          messageVi: `Nhập hoặc chọn mã ${claimCode} tại trang Thanh toán để nhận quà kèm đơn hàng.`,
+          messageEn: `Apply gift code ${claimCode} at Checkout to receive your free gift with order.`,
+          category: 'promo',
+          linkUrl: '/checkout',
+        });
+      }
+
+      const claimRes = db
+        .prepare(`
+          INSERT INTO game_reward_claims (
+            user_id, game_key, reward_id, claim_code, reward_type,
+            reward_label_vi, reward_label_en, reward_value, promo_code,
+            gift_product_id, gift_product_slug, gift_product_name_vi, gift_product_name_en,
+            gift_product_variant, gift_image_key, status, expires_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          userId,
+          gameKey,
+          wonReward.id,
+          claimCode,
+          wonReward.reward_type,
+          wonReward.label_vi,
+          wonReward.label_en,
+          Number(wonReward.reward_value || 0),
+          promoCode,
+          wonReward.gift_product_id ?? null,
+          wonReward.gift_product_slug || '',
+          wonReward.gift_product_name_vi || '',
+          wonReward.gift_product_name_en || '',
+          wonReward.gift_product_variant || '',
+          wonReward.gift_image_key || '',
+          claimStatus,
+          expiryIso
+        );
+      const claimId = Number(claimRes.lastInsertRowid);
+      const claim = db.prepare('SELECT * FROM game_reward_claims WHERE id = ?').get(claimId);
+
+      db.prepare(`
+        INSERT INTO game_plays (user_id, game_key, play_date, used_points, score, reward_id, claim_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, gameKey, today, usedPoints, score, wonReward.id, claimId);
+
+      return {
+        won: true,
+        score,
+        usedPoints,
+        reward: wonReward,
+        claim,
+        promoCode,
+      };
+    })();
+
+    const remainingRow = db
+      .prepare('SELECT COUNT(*) as cnt FROM game_plays WHERE user_id = ? AND game_key = ? AND play_date = ?')
+      .get(userId, gameKey, today) as { cnt: number };
+
+    res.json({
+      ok: true,
+      ...outcome,
+      remainingFreeToday: Math.max(0, Number(cfg.daily_free_plays || 0) - Number(remainingRow?.cnt || 0)),
+      points: getPointsSummary(userId),
+    });
+  } catch (err: any) {
+    res.status(err.status || 400).json({
+      error: err.message || 'Không thể thực hiện lượt chơi lúc này.',
+      outOfFreePlays: Boolean(err.outOfFreePlays),
+    });
+  }
+});
+
+app.get('/api/admin/games', requirePermission('promotions'), (_req, res) => {
+  const configs = db.prepare('SELECT * FROM game_configs ORDER BY game_key ASC').all();
+  const rewards = db.prepare('SELECT * FROM game_rewards ORDER BY game_key ASC, slot_order ASC, id ASC').all();
+  const claims = db
+    .prepare(
+      `SELECT c.*, u.full_name as user_name, u.email as user_email, u.member_code
+       FROM game_reward_claims c
+       LEFT JOIN users u ON u.id = c.user_id
+       ORDER BY c.id DESC
+       LIMIT 120`
+    )
+    .all();
+  const checkinSchedule = getCheckinRewardSchedule();
+  res.json({ configs, rewards, claims, checkinSchedule });
+});
+
+app.patch('/api/admin/games/configs/:gameKey', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const gameKey = String(req.params.gameKey || '').trim();
+  const existing = db.prepare('SELECT * FROM game_configs WHERE game_key = ?').get(gameKey) as any;
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy cấu hình mini-game' });
+    return;
+  }
+  const b = req.body || {};
+  db.prepare(`
+    UPDATE game_configs SET
+      title_vi = ?, title_en = ?, subtitle_vi = ?, subtitle_en = ?,
+      daily_free_plays = ?, extra_play_cost_points = ?, min_score_to_win = ?, active = ?,
+      updated_at = datetime('now')
+    WHERE game_key = ?
+  `).run(
+    b.title_vi ?? existing.title_vi,
+    b.title_en ?? existing.title_en,
+    b.subtitle_vi ?? existing.subtitle_vi,
+    b.subtitle_en ?? existing.subtitle_en,
+    b.daily_free_plays !== undefined ? Math.max(0, Number(b.daily_free_plays)) : existing.daily_free_plays,
+    b.extra_play_cost_points !== undefined ? Math.max(1, Number(b.extra_play_cost_points)) : existing.extra_play_cost_points,
+    b.min_score_to_win !== undefined ? Math.max(0, Number(b.min_score_to_win)) : existing.min_score_to_win,
+    b.active !== undefined ? (b.active ? 1 : 0) : existing.active,
+    gameKey
+  );
+  logAudit(req.authUser!.userId, req.authUser!.email, 'UPDATE_GAME_CONFIG', 'game_config', gameKey, b);
+  scheduleSnapshotSync(db);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/games/rewards', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const b = req.body || {};
+  if (!b.game_key || !b.label_vi || !b.reward_type) {
+    res.status(400).json({ error: 'game_key, label_vi và reward_type là bắt buộc' });
+    return;
+  }
+  const maxSlot = (
+    db.prepare('SELECT COALESCE(MAX(slot_order), 0) as m FROM game_rewards WHERE game_key = ?').get(b.game_key) as {
+      m: number;
+    }
+  ).m;
+  const stockTotal = b.stock_total !== undefined ? Number(b.stock_total) : -1;
+  const stockRemaining = b.stock_remaining !== undefined ? Number(b.stock_remaining) : stockTotal;
+
+  const result = db
+    .prepare(`
+      INSERT INTO game_rewards (
+        game_key, slot_order, label_vi, label_en, description_vi, description_en,
+        reward_type, reward_value, min_order_value, max_discount,
+        gift_product_id, gift_product_slug, gift_product_name_vi, gift_product_name_en,
+        gift_product_variant, gift_image_key, weight, stock_total, stock_remaining,
+        color_hex, badge_vi, badge_en, active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      b.game_key,
+      b.slot_order !== undefined ? Number(b.slot_order) : maxSlot + 1,
+      String(b.label_vi).trim(),
+      String(b.label_en || b.label_vi).trim(),
+      b.description_vi || '',
+      b.description_en || b.description_vi || '',
+      b.reward_type,
+      Number(b.reward_value || 0),
+      Number(b.min_order_value || 0),
+      Number(b.max_discount || 0),
+      b.gift_product_id ? Number(b.gift_product_id) : null,
+      b.gift_product_slug || '',
+      b.gift_product_name_vi || '',
+      b.gift_product_name_en || b.gift_product_name_vi || '',
+      b.gift_product_variant || '',
+      b.gift_image_key || 'product_robusta_house',
+      Math.max(1, Number(b.weight || 10)),
+      stockTotal,
+      stockRemaining,
+      b.color_hex || '#00552B',
+      b.badge_vi || '',
+      b.badge_en || b.badge_vi || '',
+      b.active !== undefined ? (b.active ? 1 : 0) : 1
+    );
+  const newId = Number(result.lastInsertRowid);
+  logAudit(req.authUser!.userId, req.authUser!.email, 'CREATE_GAME_REWARD', 'game_reward', newId, {
+    game_key: b.game_key,
+    label_vi: b.label_vi,
+  });
+  scheduleSnapshotSync(db);
+  res.status(201).json({ ok: true, id: newId });
+});
+
+app.put('/api/admin/games/rewards/:id', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM game_rewards WHERE id = ?').get(id) as any;
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy phần thưởng' });
+    return;
+  }
+  const b = req.body || {};
+  db.prepare(`
+    UPDATE game_rewards SET
+      game_key = ?, slot_order = ?, label_vi = ?, label_en = ?,
+      description_vi = ?, description_en = ?, reward_type = ?, reward_value = ?,
+      min_order_value = ?, max_discount = ?, gift_product_id = ?, gift_product_slug = ?,
+      gift_product_name_vi = ?, gift_product_name_en = ?, gift_product_variant = ?, gift_image_key = ?,
+      weight = ?, stock_total = ?, stock_remaining = ?, color_hex = ?,
+      badge_vi = ?, badge_en = ?, active = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    b.game_key ?? existing.game_key,
+    b.slot_order !== undefined ? Number(b.slot_order) : existing.slot_order,
+    b.label_vi ?? existing.label_vi,
+    b.label_en ?? existing.label_en,
+    b.description_vi ?? existing.description_vi,
+    b.description_en ?? existing.description_en,
+    b.reward_type ?? existing.reward_type,
+    b.reward_value !== undefined ? Number(b.reward_value) : existing.reward_value,
+    b.min_order_value !== undefined ? Number(b.min_order_value) : existing.min_order_value,
+    b.max_discount !== undefined ? Number(b.max_discount) : existing.max_discount,
+    b.gift_product_id !== undefined ? (b.gift_product_id ? Number(b.gift_product_id) : null) : existing.gift_product_id,
+    b.gift_product_slug ?? existing.gift_product_slug,
+    b.gift_product_name_vi ?? existing.gift_product_name_vi,
+    b.gift_product_name_en ?? existing.gift_product_name_en,
+    b.gift_product_variant ?? existing.gift_product_variant,
+    b.gift_image_key ?? existing.gift_image_key,
+    b.weight !== undefined ? Math.max(1, Number(b.weight)) : existing.weight,
+    b.stock_total !== undefined ? Number(b.stock_total) : existing.stock_total,
+    b.stock_remaining !== undefined ? Number(b.stock_remaining) : existing.stock_remaining,
+    b.color_hex ?? existing.color_hex,
+    b.badge_vi ?? existing.badge_vi,
+    b.badge_en ?? existing.badge_en,
+    b.active !== undefined ? (b.active ? 1 : 0) : existing.active,
+    id
+  );
+  logAudit(req.authUser!.userId, req.authUser!.email, 'UPDATE_OR_REPLACE_GAME_REWARD', 'game_reward', id, {
+    label_vi: b.label_vi ?? existing.label_vi,
+    reward_type: b.reward_type ?? existing.reward_type,
+    gift_product_slug: b.gift_product_slug ?? existing.gift_product_slug,
+  });
+  scheduleSnapshotSync(db);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/games/rewards/:id', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT id, game_key, label_vi FROM game_rewards WHERE id = ?').get(id) as any;
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy phần thưởng' });
+    return;
+  }
+  db.prepare('DELETE FROM game_rewards WHERE id = ?').run(id);
+  logAudit(req.authUser!.userId, req.authUser!.email, 'DELETE_GAME_REWARD', 'game_reward', id, existing);
+  scheduleSnapshotSync(db);
+  res.json({ ok: true });
+});
+
+app.patch('/api/admin/games/claims/:id', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const id = Number(req.params.id);
+  const existing = db.prepare('SELECT * FROM game_reward_claims WHERE id = ?').get(id) as any;
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy lượt nhận thưởng' });
+    return;
+  }
+  const b = req.body || {};
+  const allowedStatuses = ['active', 'redeemed', 'fulfilled', 'expired', 'cancelled'];
+  const nextStatus = allowedStatuses.includes(b.status) ? b.status : existing.status;
+  db.prepare('UPDATE game_reward_claims SET status = ?, admin_note = ? WHERE id = ?').run(
+    nextStatus,
+    b.admin_note !== undefined ? String(b.admin_note) : existing.admin_note,
+    id
+  );
+  logAudit(req.authUser!.userId, req.authUser!.email, 'UPDATE_GAME_CLAIM', 'game_reward_claim', id, {
+    status: nextStatus,
+  });
+  res.json({ ok: true });
+});
+
+app.put('/api/admin/games/checkin-schedule', requirePermission('promotions'), (req: AuthedRequest, res) => {
+  const schedule = req.body?.schedule;
+  if (!Array.isArray(schedule) || schedule.length !== 7) {
+    res.status(400).json({ error: 'Cần đủ 7 ngày điểm danh hợp lệ.' });
+    return;
+  }
+  const normalized: CheckinScheduleDay[] = schedule.map((d: any, idx: number) => ({
+    day: idx + 1,
+    points: Math.max(0, Math.round(Number(d.points ?? 10))),
+    bonusVi: String(d.bonusVi || '').trim(),
+    bonusEn: String(d.bonusEn || d.bonusVi || '').trim(),
+  }));
+  db.prepare(`
+    INSERT INTO site_settings (key, value) VALUES ('checkin_schedule_json', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(JSON.stringify(normalized));
+  logAudit(req.authUser!.userId, req.authUser!.email, 'UPDATE_CHECKIN_SCHEDULE', 'site_settings', 'checkin_schedule_json', {
+    days: 7,
+  });
+  scheduleSnapshotSync(db);
+  res.json({ ok: true, schedule: normalized });
+});
+
+app.get('/api/admin/games/analytics', requirePermission('promotions'), (req, res) => {
+  const daysRaw = String(req.query.days || '14').toLowerCase();
+  const days = daysRaw === 'all' || daysRaw === '0' ? 0 : Math.min(90, Math.max(7, Number(daysRaw) || 14));
+  const sinceDate = days > 0 ? getVietnamDateStr(-(days - 1)) : '1970-01-01';
+
+  const configs = db
+    .prepare(
+      `SELECT * FROM game_configs
+       ORDER BY CASE game_key
+         WHEN 'wheel' THEN 1
+         WHEN 'shake' THEN 2
+         WHEN 'fortune' THEN 3
+         WHEN 'quiz' THEN 4
+         WHEN 'memory' THEN 5
+         WHEN 'harvest' THEN 6
+         WHEN 'mystery' THEN 7
+         ELSE 8
+       END`
+    )
+    .all() as any[];
+
+  const plays = db
+    .prepare('SELECT id, user_id, game_key, play_date, used_points, reward_id, claim_id FROM game_plays WHERE play_date >= ?')
+    .all(sinceDate) as Array<{
+      id: number;
+      user_id: number;
+      game_key: string;
+      play_date: string;
+      used_points: number;
+      reward_id: number | null;
+      claim_id: number | null;
+    }>;
+
+  const claims = db
+    .prepare(
+      `SELECT c.id, c.user_id, c.game_key, c.reward_type, c.claim_code, c.promo_code, c.status,
+              c.redeemed_order_id, c.redeemed_at, substr(c.created_at, 1, 10) as claim_date,
+              COALESCE(o.total, 0) as order_total, o.order_status
+       FROM game_reward_claims c
+       LEFT JOIN orders o ON (
+         o.id = c.redeemed_order_id
+         OR (c.promo_code != '' AND UPPER(o.voucher_code) = UPPER(c.promo_code))
+       )
+       WHERE substr(c.created_at, 1, 10) >= ?`
+    )
+    .all(sinceDate) as Array<{
+      id: number;
+      user_id: number;
+      game_key: string;
+      reward_type: string;
+      claim_code: string;
+      promo_code: string;
+      status: string;
+      redeemed_order_id: number | null;
+      redeemed_at: string | null;
+      claim_date: string;
+      order_total: number;
+      order_status: string | null;
+    }>;
+
+  const totalCheckins = (
+    db.prepare('SELECT COUNT(*) as c FROM daily_checkins WHERE checkin_date >= ?').get(sinceDate) as { c: number }
+  ).c;
+
+  const isClaimConverted = (c: (typeof claims)[number]) =>
+    c.status === 'redeemed' ||
+    (c.status === 'fulfilled' && c.reward_type !== 'points') ||
+    (Boolean(c.redeemed_order_id) && c.order_status !== 'Cancelled') ||
+    (Number(c.order_total || 0) > 0 && c.order_status !== 'Cancelled');
+
+  const isRedeemableType = (rt: string) => rt !== 'points';
+
+  const uniquePlayerSet = new Set(plays.map((p) => p.user_id));
+  const totalPlays = plays.length;
+  const totalWins = plays.filter((p) => p.reward_id !== null).length;
+  const totalPointsSpent = plays.reduce((acc, p) => acc + Number(p.used_points || 0), 0);
+
+  const redeemableClaimsList = claims.filter((c) => isRedeemableType(c.reward_type));
+  const convertedClaimsList = redeemableClaimsList.filter(isClaimConverted);
+  const seenOrderKeys = new Set<string>();
+  let attributedRevenueVnd = 0;
+  for (const c of convertedClaimsList) {
+    if (Number(c.order_total || 0) > 0) {
+      const k = c.redeemed_order_id ? `oid:${c.redeemed_order_id}` : `code:${c.claim_code}`;
+      if (!seenOrderKeys.has(k)) {
+        seenOrderKeys.add(k);
+        attributedRevenueVnd += Number(c.order_total || 0);
+      }
+    }
+  }
+
+  const summary = {
+    totalPlays,
+    uniquePlayers: uniquePlayerSet.size,
+    totalWins,
+    winRatePct: totalPlays > 0 ? Math.round((totalWins / totalPlays) * 1000) / 10 : 0,
+    totalPointsSpent,
+    totalRedeemableClaims: redeemableClaimsList.length,
+    totalRedeemedOrders: convertedClaimsList.length,
+    conversionRatePct:
+      redeemableClaimsList.length > 0
+        ? Math.round((convertedClaimsList.length / redeemableClaimsList.length) * 1000) / 10
+        : 0,
+    attributedRevenueVnd,
+    totalCheckins: Number(totalCheckins || 0),
+  };
+
+  const byGame = configs.map((cfg) => {
+    const gPlays = plays.filter((p) => p.game_key === cfg.game_key);
+    const gWins = gPlays.filter((p) => p.reward_id !== null).length;
+    const gUnique = new Set(gPlays.map((p) => p.user_id)).size;
+    const gPts = gPlays.reduce((acc, p) => acc + Number(p.used_points || 0), 0);
+    const gRedeemable = redeemableClaimsList.filter((c) => c.game_key === cfg.game_key);
+    const gConverted = gRedeemable.filter(isClaimConverted);
+    const gRevSeen = new Set<string>();
+    let gRev = 0;
+    for (const c of gConverted) {
+      if (Number(c.order_total || 0) > 0) {
+        const k = c.redeemed_order_id ? `oid:${c.redeemed_order_id}` : `code:${c.claim_code}`;
+        if (!gRevSeen.has(k)) {
+          gRevSeen.add(k);
+          gRev += Number(c.order_total || 0);
+        }
+      }
+    }
+    return {
+      game_key: cfg.game_key,
+      title_vi: cfg.title_vi,
+      title_en: cfg.title_en,
+      plays: gPlays.length,
+      uniquePlayers: gUnique,
+      wins: gWins,
+      winRatePct: gPlays.length > 0 ? Math.round((gWins / gPlays.length) * 1000) / 10 : 0,
+      pointsSpent: gPts,
+      redeemableClaims: gRedeemable.length,
+      redeemedOrders: gConverted.length,
+      conversionRatePct: gRedeemable.length > 0 ? Math.round((gConverted.length / gRedeemable.length) * 1000) / 10 : 0,
+      attributedRevenueVnd: gRev,
+    };
+  });
+
+  const windowDays = days > 0 ? days : 30;
+  const dailyMap = new Map<string, { plays: number; wins: number; conversions: number }>();
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const dStr = getVietnamDateStr(-i);
+    dailyMap.set(dStr, { plays: 0, wins: 0, conversions: 0 });
+  }
+  for (const p of plays) {
+    const cur = dailyMap.get(p.play_date);
+    if (cur) {
+      cur.plays += 1;
+      if (p.reward_id !== null) cur.wins += 1;
+    }
+  }
+  for (const c of convertedClaimsList) {
+    const dKey = String(c.redeemed_at || c.claim_date || '').slice(0, 10);
+    const cur = dailyMap.get(dKey);
+    if (cur) cur.conversions += 1;
+  }
+  const dailySeries = Array.from(dailyMap.entries()).map(([date, val]) => ({
+    date,
+    label: date.slice(5),
+    plays: val.plays,
+    wins: val.wins,
+    conversions: val.conversions,
+  }));
+
+  const rewardTypeMeta: Array<{ type: string; label: string }> = [
+    { type: 'points', label: 'Điểm ROAR' },
+    { type: 'voucher_percent', label: 'Voucher %' },
+    { type: 'voucher_fixed', label: 'Voucher Tiền' },
+    { type: 'free_shipping', label: 'Freeship' },
+    { type: 'product_gift', label: 'Quà Sản Phẩm' },
+  ];
+  const byRewardType = rewardTypeMeta.map((rt) => {
+    const rows = claims.filter((c) => c.reward_type === rt.type);
+    const red = rows.filter((c) => (rt.type === 'points' ? c.status === 'fulfilled' : isClaimConverted(c))).length;
+    return {
+      reward_type: rt.type,
+      label: rt.label,
+      issued: rows.length,
+      redeemed: red,
+      conversionPct: rows.length > 0 ? Math.round((red / rows.length) * 1000) / 10 : 0,
+    };
+  });
+
+  res.json({
+    days,
+    summary,
+    byGame,
+    dailySeries,
+    byRewardType,
+  });
 });
 
 app.get('/api/admin/b2b', requirePermission('b2b'), (_req, res) => {
@@ -4283,18 +5162,48 @@ app.post('/api/admin/exchange-rate/vietcombank/sync', requirePermission('product
 
 // ---------- VITE / STATIC SERVING ----------
 async function startServer() {
+  const httpServer = http.createServer(app);
   const distDir = path.resolve(process.cwd(), 'dist');
   const useProdStatic = IS_PROD && fs.existsSync(distDir);
+  const disableHmr = process.env.DISABLE_HMR === 'true';
 
   if (!useProdStatic) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
         allowedHosts: true,
-        hmr: process.env.DISABLE_HMR !== 'true',
+        hmr: disableHmr ? false : { server: httpServer },
+        ws: disableHmr ? false : { server: httpServer },
+        watch: disableHmr ? null : {},
       },
       appType: 'spa',
     });
+
+    if (disableHmr) {
+      // Vite 8 still serves /@vite/client with a WebSocket connect call on port 24678
+      // even when hmr: false & ws: false; replace the WebSocket transport with a no-op
+      // connected transport so transport.connect succeeds and import.meta.hot.send never throws.
+      app.get('/@vite/client', async (_req, res, next) => {
+        try {
+          const transformed = await vite.transformRequest('/@vite/client');
+          if (!transformed) return next();
+          const patchedCode = transformed.code.replace(
+            /const transport = normalizeModuleRunnerTransport\(\(\(\) => \{[\s\S]*?\}\)\(\)\);/,
+            'const transport = normalizeModuleRunnerTransport({ async connect() {}, async disconnect() {}, send() {} });'
+          );
+          res
+            .status(200)
+            .set({
+              'Content-Type': 'application/javascript; charset=utf-8',
+              'Cache-Control': 'no-cache',
+            })
+            .send(patchedCode);
+        } catch (err) {
+          next(err);
+        }
+      });
+    }
+
     app.use(vite.middlewares);
   } else {
     app.use('/src/assets', express.static(path.resolve(process.cwd(), 'src/assets')));
@@ -4304,7 +5213,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`ROAR COFFEE platform listening on http://localhost:${PORT}`);
   });
 }

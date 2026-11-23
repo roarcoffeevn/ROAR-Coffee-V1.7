@@ -17,7 +17,7 @@ export interface Product {
   slug: string;
   sku: string;
   barcode?: string;
-  category: 'roasted' | 'roasted_beans' | 'green_bean' | 'instant';
+  category: 'roasted' | 'roasted_beans' | 'green_bean' | 'instant' | 'pepper';
   sub_category: string;
   name_vi: string;
   name_en: string;

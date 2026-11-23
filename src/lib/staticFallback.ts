@@ -15,6 +15,8 @@ interface SnapshotFile {
     loyalty_settings: any[];
     site_settings: Array<{ key: string; value: string }>;
     media_assets: any[];
+    game_configs?: any[];
+    game_rewards?: any[];
   };
 }
 

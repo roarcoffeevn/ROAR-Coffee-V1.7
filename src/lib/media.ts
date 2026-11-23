@@ -25,6 +25,15 @@ import journalCoffeeProcesses from '../assets/images/journal_coffee_processes_17
 import journalS18Roastery from '../assets/images/journal_s18_roastery_1795239117151.jpg';
 import journalTastingArchetypes from '../assets/images/journal_tasting_archetypes_1795239116993.jpg';
 import journalColdbrewGifting from '../assets/images/journal_coldbrew_gifting_1795239117775.jpg';
+import pepperGroundBlackJar from '../assets/images/pepper_ground_black_jar_1795427600636.jpg';
+import pepperHulledWhiteJar from '../assets/images/pepper_hulled_white_jar_1795427600767.jpg';
+import pepperBlackGrinderJar from '../assets/images/pepper_black_grinder_jar_1795427602042.jpg';
+import pepperWhiteGrinderJar from '../assets/images/pepper_white_grinder_jar_1795427601993.jpg';
+import instant3in1BoxChill from '../assets/images/instant_3in1_box_chill_1795427601327.jpg';
+import instant3in1Pouch45Chill from '../assets/images/instant_3in1_pouch_45_chill_1795427601020.jpg';
+import instantSaltedCoffeeChill from '../assets/images/instant_salted_coffee_chill_1795427600994.jpg';
+import instantSilverChill from '../assets/images/instant_silver_chill_1795427600928.jpg';
+import instantGoldChill from '../assets/images/instant_gold_chill_1795427602130.jpg';
 
 export const OFFICIAL_LOGOS = {
   horizontal: '/assets/aistudio/ROAR_COFFEE_Logo_Ngang_1_Mau_e2b7f050.png',
@@ -59,6 +68,21 @@ export const MEDIA_ASSETS: Record<string, string> = {
   journal_s18_roastery: journalS18Roastery,
   journal_tasting_archetypes: journalTastingArchetypes,
   journal_coldbrew_gifting: journalColdbrewGifting,
+  pepper_ground_black_jar: pepperGroundBlackJar,
+  pepper_hulled_white_jar: pepperHulledWhiteJar,
+  pepper_black_grinder_jar: pepperBlackGrinderJar,
+  pepper_white_grinder_jar: pepperWhiteGrinderJar,
+  instant_3in1_box_chill: instant3in1BoxChill,
+  instant_3in1_pouch_45_chill: instant3in1Pouch45Chill,
+  instant_salted_coffee_chill: instantSaltedCoffeeChill,
+  instant_silver_chill: instantSilverChill,
+  instant_gold_chill: instantGoldChill,
+  '/assets/pepper/tieu-den-xay.svg': pepperGroundBlackJar,
+  '/assets/pepper/tieu-den-so.svg': pepperHulledWhiteJar,
+  '/assets/pepper/tieu-den-coi-xay.svg': pepperBlackGrinderJar,
+  '/assets/pepper/tieu-so-coi-xay.svg': pepperWhiteGrinderJar,
+  '/assets/instant/instant-silver.jpg': instantSilverChill,
+  '/assets/instant/instant-gold.jpg': instantGoldChill,
 };
 
 export interface BuiltinMediaItem {
@@ -88,8 +112,11 @@ export const BUILTIN_MEDIA_ITEMS: BuiltinMediaItem[] = [
   { key: 'mascot_wolf', labelVi: 'Linh vật Sói (Tương lai)', labelEn: 'Mascot Wolf', category: 'Linh vật', url: mascotWolf },
   { key: 'mascot_owl', labelVi: 'Linh vật Cú Mèo (Tương lai)', labelEn: 'Mascot Owl', category: 'Linh vật', url: mascotOwl },
   { key: 'mascot_panther', labelVi: 'Linh vật Báo Đen (Reserve)', labelEn: 'Mascot Black Panther', category: 'Linh vật', url: mascotPanther },
-  { key: '/assets/instant/instant-silver.jpg', labelVi: 'Cà phê Hòa tan Silver Collection', labelEn: 'Instant Silver Collection', category: 'Sản phẩm', url: '/assets/instant/instant-silver.jpg' },
-  { key: '/assets/instant/instant-gold.jpg', labelVi: 'Cà phê Hòa tan Gold Collection', labelEn: 'Instant Gold Collection', category: 'Sản phẩm', url: '/assets/instant/instant-gold.jpg' },
+  { key: 'instant_silver_chill', labelVi: 'Cà phê Hòa tan Silver Collection (Chill)', labelEn: 'Instant Silver Collection (Chill)', category: 'Sản phẩm', url: instantSilverChill },
+  { key: 'instant_gold_chill', labelVi: 'Cà phê Hòa tan Gold Collection (Chill)', labelEn: 'Instant Gold Collection (Chill)', category: 'Sản phẩm', url: instantGoldChill },
+  { key: 'instant_3in1_box_chill', labelVi: 'Cà phê Hòa tan 3in1 Hộp 10 gói (Chill)', labelEn: '3in1 Instant Box 10 Sticks (Chill)', category: 'Sản phẩm', url: instant3in1BoxChill },
+  { key: 'instant_3in1_pouch_45_chill', labelVi: 'Cà phê Hòa tan 3in1 Túi 45 gói (Chill)', labelEn: '3in1 Instant Pouch 45 Sticks (Chill)', category: 'Sản phẩm', url: instant3in1Pouch45Chill },
+  { key: 'instant_salted_coffee_chill', labelVi: 'Cà phê Muối Hòa tan Hộp 10 gói (Chill)', labelEn: 'Salted Instant Coffee Box 10 Sticks (Chill)', category: 'Sản phẩm', url: instantSaltedCoffeeChill },
   { key: '/assets/vouchers/gift-voucher-50k.jpg', labelVi: 'Thẻ Quà Tặng Gift Voucher 50.000₫', labelEn: 'Gift Voucher 50,000 VND', category: 'Voucher', url: '/assets/vouchers/gift-voucher-50k.jpg' },
   { key: '/assets/vouchers/gift-voucher-100k.jpg', labelVi: 'Thẻ Quà Tặng Gift Voucher 100.000₫', labelEn: 'Gift Voucher 100,000 VND', category: 'Voucher', url: '/assets/vouchers/gift-voucher-100k.jpg' },
   { key: '/assets/vouchers/gift-voucher-500k.jpg', labelVi: 'Thẻ Quà Tặng Gift Voucher 500.000₫', labelEn: 'Gift Voucher 500,000 VND', category: 'Voucher', url: '/assets/vouchers/gift-voucher-500k.jpg' },
@@ -106,6 +133,10 @@ export const BUILTIN_MEDIA_ITEMS: BuiltinMediaItem[] = [
   { key: 'journal_s18_roastery', labelVi: 'Tạp chí: Rang hạt S18 cho quán Espresso', labelEn: 'Journal: S18 Roastery & Espresso Bar', category: 'Tạp chí', url: journalS18Roastery },
   { key: 'journal_tasting_archetypes', labelVi: 'Tạp chí: 7 Cá tính & Gu thưởng thức', labelEn: 'Journal: 7 Personalities Tasting Flight', category: 'Tạp chí', url: journalTastingArchetypes },
   { key: 'journal_coldbrew_gifting', labelVi: 'Tạp chí: Cold Brew 16h & Quà tặng Cao cấp', labelEn: 'Journal: Cold Brew & Executive Gifting', category: 'Tạp chí', url: journalColdbrewGifting },
+  { key: 'pepper_ground_black_jar', labelVi: 'Tiêu Đen Xay Nguyên Chất (Hũ 45g / 90g)', labelEn: 'Pure Ground Black Pepper Jar (45g / 90g)', category: 'Tiêu Tây Nguyên', url: pepperGroundBlackJar },
+  { key: 'pepper_hulled_white_jar', labelVi: 'Tiêu Đen Sọ Nguyên Hạt (Hũ 45g / 90g)', labelEn: 'Whole Hulled Pepper Jar (45g / 90g)', category: 'Tiêu Tây Nguyên', url: pepperHulledWhiteJar },
+  { key: 'pepper_black_grinder_jar', labelVi: 'Tiêu Đen Hạt Cối Xay 70g', labelEn: 'Black Peppercorns Built-In Grinder (70g)', category: 'Tiêu Tây Nguyên', url: pepperBlackGrinderJar },
+  { key: 'pepper_white_grinder_jar', labelVi: 'Tiêu Sọ Hạt Cối Xay 70g', labelEn: 'White Peppercorns Built-In Grinder (70g)', category: 'Tiêu Tây Nguyên', url: pepperWhiteGrinderJar },
 ];
 
 export function getPromoVoucherImage(promo?: { code?: string; discount_type?: string } | null): string {
@@ -122,10 +153,13 @@ export function getPromoVoucherImage(promo?: { code?: string; discount_type?: st
 
 export function resolveMediaUrl(keyOrUrl?: string, fallbackKey = 'product_robusta_house'): string {
   if (!keyOrUrl) return MEDIA_ASSETS[fallbackKey] || heroRoarCoffee;
+  if (MEDIA_ASSETS[keyOrUrl]) {
+    return MEDIA_ASSETS[keyOrUrl];
+  }
   if (keyOrUrl.startsWith('http') || keyOrUrl.startsWith('/') || keyOrUrl.startsWith('data:')) {
     return keyOrUrl;
   }
-  return MEDIA_ASSETS[keyOrUrl] || MEDIA_ASSETS[fallbackKey] || heroRoarCoffee;
+  return MEDIA_ASSETS[fallbackKey] || heroRoarCoffee;
 }
 
 export interface ProductGallerySlide {
@@ -261,10 +295,19 @@ export function getDefaultAdditionalGallerySlides(product: {
 
   if (product.category === 'instant') {
     return [
-      { imageKey: '/assets/instant/instant-silver.jpg', captionVi: 'Bộ sưu tập Hòa tan Silver — Sắc xanh rừng & nhũ bạc tinh tế', captionEn: 'Instant Silver Collection — Forest green with brushed silver foil' },
-      { imageKey: '/assets/instant/instant-gold.jpg', captionVi: 'Bộ sưu tập Hòa tan Gold — Phiên bản cao cấp ánh vàng Champagne', captionEn: 'Instant Gold Collection — Luxury Champagne Gold edition' },
-      { imageKey: 'product_brewing_ritual', captionVi: 'Cảm hứng tách cà phê sáng chuẩn gu Việt', captionEn: 'Inspired by authentic morning coffee rituals' },
-      { imageKey: 'origin_central_highlands', captionVi: 'Nguồn hạt tuyển chọn từ nông hộ Tây Nguyên', captionEn: 'Highland-grown Vietnamese coffee selection' },
+      { imageKey: 'instant_3in1_box_chill', captionVi: 'ROAR 3in1 Hộp 10 gói — Thưởng thức cà phê sữa đá chill mọi lúc', captionEn: 'ROAR 3in1 10-Stick Box — Effortless iced milk coffee anytime' },
+      { imageKey: 'instant_salted_coffee_chill', captionVi: 'ROAR Cà Phê Muối — Lớp kem mặn mịn màng hòa quyện cà phê đậm', captionEn: 'ROAR Salted Coffee — Silky sea-salt cream over rich roast' },
+      { imageKey: 'instant_silver_chill', captionVi: 'Bộ sưu tập Hòa tan Silver — Sắc xanh rừng & nhũ bạc tinh tế', captionEn: 'Instant Silver Collection — Forest green with brushed silver foil' },
+      { imageKey: 'instant_gold_chill', captionVi: 'Bộ sưu tập Hòa tan Gold — Phiên bản cao cấp ánh vàng Champagne', captionEn: 'Instant Gold Collection — Luxury Champagne Gold edition' },
+    ];
+  }
+
+  if (product.category === 'pepper') {
+    return [
+      { imageKey: 'pepper_ground_black_jar', captionVi: 'Tiêu Đen Xay Nguyên Chất (Hũ thủy tinh 45g & 90g)', captionEn: 'Pure Ground Black Pepper (45g & 90g Glass Jars)' },
+      { imageKey: 'pepper_hulled_white_jar', captionVi: 'Tiêu Đen Sọ Tuyển Chọn (Hũ thủy tinh 45g & 90g)', captionEn: 'Selected Whole Hulled Pepper (45g & 90g Glass Jars)' },
+      { imageKey: 'pepper_black_grinder_jar', captionVi: 'Hũ Cối Xay Tiêu Đen & Tiêu Sọ 70g Giữ Trọn Tinh Dầu', captionEn: '70g Built-In Grinder Preserving Essential Spice Aroma' },
+      { imageKey: 'origin_central_highlands', captionVi: 'Đặc sản nông sản đất đỏ bazan Tây Nguyên', captionEn: 'Central Highlands Basalt Terroir Specialty' },
     ];
   }
 

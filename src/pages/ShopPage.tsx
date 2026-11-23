@@ -13,7 +13,7 @@ import { printB2BQuoteSheet } from '../lib/printDocuments';
 import { fetchProductsWithFallback } from '../lib/staticFallback';
 
 interface ShopPageProps {
-  defaultCategory?: 'all' | 'roasted' | 'roasted_beans' | 'instant' | 'green_bean' | 'gift_voucher';
+  defaultCategory?: 'all' | 'roasted' | 'roasted_beans' | 'instant' | 'pepper' | 'green_bean' | 'gift_voucher';
 }
 
 export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) => {
@@ -96,6 +96,8 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
               ? t('Cà Phê Hạt Rang (Giá Theo Kg)', 'Roasted Coffee Beans (Volume Tiers)')
               : category === 'instant'
               ? t('Cà Phê Hòa Tan Silver & Gold', 'Instant Coffee — Silver & Gold')
+              : category === 'pepper'
+              ? t('Tiêu Đen & Tiêu Sọ Tây Nguyên', 'Highland Black & White Pepper')
               : category === 'green_bean'
               ? t('Cà Phê Nhân Xanh (Giá Theo Kg)', 'Green Coffee Beans (Per Kg Catalog)')
               : category === 'gift_voucher'
@@ -131,7 +133,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
                   titleEn: 'Roasted Coffee Beans — 5-Tier Volume Quotation (kg)',
                   subtitleVi: 'Áp dụng cho Quán Cà Phê, HORECA, Văn Phòng & Khách Sỉ ROAR COFFEE',
                   subtitleEn: 'Commercial wholesale schedule for Cafes, HORECA & Offices',
-                  products,
+                  products: products.filter((p) => (p.pricing_tiers?.length || 0) > 0),
                   lang,
                   mode: 'roasted_beans',
                   formatPrice,
@@ -164,6 +166,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
             { id: 'roasted_beans', vi: 'Cà phê Hạt Rang (kg)', en: 'Roasted Beans (kg)', to: '/coffee/roasted-beans' },
             { id: 'green_bean', vi: 'Cà phê Nhân Xanh', en: 'Green Coffee', to: '/coffee/green-coffee' },
             { id: 'instant', vi: 'Cà phê Hòa Tan', en: 'Instant Coffee', to: '/coffee/instant' },
+            { id: 'pepper', vi: 'Tiêu Tây Nguyên', en: 'Highland Pepper', to: '/coffee/pepper' },
             { id: 'gift_voucher', vi: 'Gift Voucher', en: 'Gift Voucher', to: '/coffee/gift-vouchers' },
           ].map((tab) => (
             <button
@@ -481,7 +484,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({ defaultCategory = 'all' }) =
                     <div className={isAllGrid ? 'p-3.5 space-y-1.5' : 'p-5 space-y-2'}>
                       <div className={`flex flex-wrap items-center gap-1 text-[#202020]/60 dark:text-[#F1EFEA]/60 font-mono ${isAllGrid ? 'text-[10px]' : 'text-[11px]'}`}>
                         <span className="text-[#00552B] dark:text-[#C6A667] font-semibold truncate">
-                          {p.category === 'roasted_beans' && p.sub_category ? p.sub_category : p.sku}
+                          {p.category === 'roasted_beans' && p.pricing_tiers && p.pricing_tiers.length > 0 && p.sub_category ? p.sub_category : p.sku}
                         </span>
                         <span>·</span>
                         <span className="truncate">{localizeCoffeeType(p.coffee_type, lang)}</span>
